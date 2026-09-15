@@ -6,7 +6,10 @@
 //      so the AssemblyAI API key never leaves the server.
 //
 // The browser fetches a fresh token before every WebSocket connection.
-import { getCalendarEvents } from "./calendar.js";
+import {
+  getCalendarEvents,
+  getCalendarEventsForDate,
+} from "./calendar.js";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -74,6 +77,28 @@ app.get("/api/calendar/events", async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error("Calendar error:", err);
+
+    res.status(500).json({
+      error: "Failed to fetch calendar events",
+    });
+  }
+});
+
+app.get("/api/calendar/date", async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({
+        error: "Date is required",
+      });
+    }
+
+    const data = await getCalendarEventsForDate(date);
+
+    res.json(data);
+  } catch (err) {
+    console.error("Calendar date error:", err);
 
     res.status(500).json({
       error: "Failed to fetch calendar events",

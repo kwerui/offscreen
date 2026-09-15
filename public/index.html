@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Voice assistant — AssemblyAI Voice Agent API</title>
+    <title>Offscreen</title>
+
     <style>
       :root {
         --bg: #0b0d12;
@@ -18,31 +19,40 @@
         --user: #2a3a5c;
         --agent: #1f3530;
       }
-      * { box-sizing: border-box; }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
         min-height: 100vh;
       }
+
       .app {
         max-width: 920px;
         margin: 0 auto;
         padding: 32px 24px 64px;
       }
+
       header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 24px;
       }
+
       h1 {
         font-size: 22px;
         font-weight: 600;
         margin: 0;
       }
+
       .status {
         display: inline-flex;
         align-items: center;
@@ -50,19 +60,38 @@
         font-size: 13px;
         color: var(--muted);
       }
+
       .dot {
         width: 10px;
         height: 10px;
         border-radius: 50%;
         background: var(--muted);
       }
-      .dot.connecting { background: #e6c25b; animation: pulse 1.2s infinite; }
-      .dot.connected  { background: var(--accent-2); }
-      .dot.error      { background: var(--danger); }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50%      { opacity: 0.35; }
+
+      .dot.connecting {
+        background: #e6c25b;
+        animation: pulse 1.2s infinite;
       }
+
+      .dot.connected {
+        background: var(--accent-2);
+      }
+
+      .dot.error {
+        background: var(--danger);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.35;
+        }
+      }
+
       .config {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -73,6 +102,7 @@
         padding: 16px;
         margin-bottom: 16px;
       }
+
       label {
         display: block;
         font-size: 12px;
@@ -81,7 +111,9 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
-      select, textarea {
+
+      select,
+      textarea {
         width: 100%;
         background: var(--panel-2);
         color: var(--text);
@@ -91,16 +123,22 @@
         font-size: 14px;
         font-family: inherit;
       }
+
       textarea {
         resize: vertical;
         min-height: 60px;
       }
-      .config .full { grid-column: 1 / -1; }
+
+      .config .full {
+        grid-column: 1 / -1;
+      }
+
       .controls {
         display: flex;
         gap: 12px;
         margin-bottom: 16px;
       }
+
       button {
         font: inherit;
         padding: 12px 18px;
@@ -109,24 +147,27 @@
         background: var(--panel-2);
         color: var(--text);
         cursor: pointer;
-        transition: background 0.15s ease, transform 0.05s ease;
       }
-      button:hover:not(:disabled) { background: #232a3b; }
-      button:active:not(:disabled) { transform: translateY(1px); }
-      button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       button.primary {
         background: var(--accent);
         border-color: var(--accent);
         color: #fff;
         font-weight: 600;
       }
-      button.primary:hover:not(:disabled) { background: #4778dd; }
+
       button.danger {
         background: var(--danger);
         border-color: var(--danger);
         color: #fff;
         font-weight: 600;
       }
+
       .transcript {
         background: var(--panel);
         border: 1px solid var(--border);
@@ -138,12 +179,14 @@
         flex-direction: column;
         gap: 10px;
       }
+
       .empty {
         margin: auto;
         color: var(--muted);
         font-size: 14px;
         text-align: center;
       }
+
       .bubble {
         max-width: 78%;
         padding: 10px 14px;
@@ -153,37 +196,51 @@
         white-space: pre-wrap;
         word-wrap: break-word;
       }
+
       .bubble.user {
         align-self: flex-end;
         background: var(--user);
         border-bottom-right-radius: 4px;
       }
+
       .bubble.agent {
         align-self: flex-start;
         background: var(--agent);
         border-bottom-left-radius: 4px;
       }
-      .bubble.partial { opacity: 0.6; font-style: italic; }
+
+      .bubble.partial {
+        opacity: 0.6;
+        font-style: italic;
+      }
+
       .bubble .meta {
         display: block;
         font-size: 11px;
         color: var(--muted);
         margin-top: 4px;
       }
+
       footer {
         margin-top: 16px;
         color: var(--muted);
         font-size: 12px;
         text-align: center;
       }
-      footer a { color: var(--accent); text-decoration: none; }
+
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+      }
     </style>
   </head>
+
   <body>
     <div class="app">
       <header>
         <h1>Offscreen</h1>
-        <span class="status" id="status">
+
+        <span class="status">
           <span class="dot" id="status-dot"></span>
           <span id="status-text">Disconnected</span>
         </span>
@@ -192,6 +249,7 @@
       <div class="config">
         <div>
           <label for="voice">Voice</label>
+
           <select id="voice">
             <option value="ivy">Ivy (US, professional)</option>
             <option value="james">James (US, conversational)</option>
@@ -205,101 +263,116 @@
             <option value="arjun">Arjun (Hindi/Hinglish)</option>
             <option value="pierre">Pierre (French)</option>
             <option value="lena">Lena (German)</option>
-            <option value="diego">Diego (Spanish, Latin American)</option>
+            <option value="diego">Diego (Spanish)</option>
             <option value="giulia">Giulia (Italian)</option>
             <option value="ren">Ren (Japanese)</option>
             <option value="mina">Mina (Korean)</option>
           </select>
         </div>
+
         <div>
           <label for="greeting">Greeting</label>
+
           <select id="greeting">
-<option value="Offscreen is ready. What can I do?">Default</option>
-<option value="Ready when you are.">Minimal</option>
-<option value="Hey — what should I handle?">Casual</option>
+            <option value="Offscreen is ready. What can I do?">
+              Default
+            </option>
+            <option value="Ready when you are.">
+              Minimal
+            </option>
+            <option value="Hey — what should I handle?">
+              Casual
+            </option>
           </select>
         </div>
+
         <div class="full">
           <label for="prompt">System prompt</label>
-<textarea id="prompt">You are Offscreen, a voice-first computer companion.
+
+          <textarea id="prompt">You are Offscreen, a voice-first computer companion.
 
 Your purpose is to help the user complete routine digital tasks while reducing unnecessary screen and keyboard interaction.
 
 Keep spoken responses brief and natural.
 
-You can open supported websites using the open_website tool.
+You can open supported websites using open_website.
 
-You can check the user's real Google Calendar using the get_upcoming_events tool.
+You can access the user's real Google Calendar using get_calendar_events.
 
-Whenever the user asks about their calendar, schedule, next event, upcoming events, or what they have coming up, use get_upcoming_events.
+For EVERY question about the user's calendar, schedule, events, commitments, or availability, ALWAYS call get_calendar_events.
 
-Never invent calendar information. Base calendar answers only on the tool result.
+Pass the time period the user is asking about in the "when" argument.
 
-Do not claim an action succeeded until its tool reports success.
+Examples:
 
-You can read the user's real Google Calendar using the get_calendar_events tool.
+User: "What's my next event?"
+Call get_calendar_events with when = "upcoming"
 
-For calendar questions, choose the appropriate range:
-- next event / what's coming up → upcoming
-- today → today
-- tomorrow → tomorrow
-- this week → this_week
-- next week → next_week
-- this month → this_month
-- next month → next_month
+User: "What do I have today?"
+Call get_calendar_events with when = "today"
 
-Always use the calendar tool when the user asks about their real schedule.
+User: "What do I have tomorrow?"
+Call get_calendar_events with when = "tomorrow"
+
+User: "What do I have this month?"
+Call get_calendar_events with when = "this month"
+
+User: "What do I have next month?"
+Call get_calendar_events with when = "next month"
+
+User: "What do I have on September 23rd?"
+Call get_calendar_events with when = "September 23rd"
+
+User: "What's on Friday?"
+Call get_calendar_events with when = "Friday"
+
+User: "Am I free on the 28th?"
+Call get_calendar_events with when = "the 28th"
+
 Never invent calendar information.
-
-</textarea>
+Never answer a calendar question without first calling get_calendar_events.
+Do not claim an action succeeded until its tool reports success.</textarea>
         </div>
       </div>
 
       <div class="controls">
         <button class="primary" id="connect">Connect</button>
-        <button class="danger" id="disconnect" disabled>Disconnect</button>
+        <button class="danger" id="disconnect" disabled>
+          Disconnect
+        </button>
         <button id="clear">Clear transcript</button>
       </div>
 
       <div class="transcript" id="transcript">
         <div class="empty" id="empty">
-          Configure your voice and prompt above, then press Connect to start talking.
+          Configure your voice and prompt above, then press Connect.
         </div>
       </div>
 
       <footer>
-        Powered by the
-        <a href="https://www.assemblyai.com/docs/voice-agents/voice-agent-api" target="_blank" rel="noreferrer">
+        Powered by
+        <a
+          href="https://www.assemblyai.com/docs/voice-agents/voice-agent-api"
+          target="_blank"
+          rel="noreferrer"
+        >
           AssemblyAI Voice Agent API
         </a>.
       </footer>
     </div>
 
     <script>
-      // -----------------------------------------------------------------------
-      // Voice Agent API browser client
-      //
-      // Flow:
-      //   1. fetch /api/voice-token  → single-use temp token from our server
-      //   2. open WebSocket to wss://agents.assemblyai.com/v1/ws?token=...
-      //   3. send session.update FIRST (system_prompt, greeting, voice)
-      //   4. wait for session.ready, then start the AudioWorklet
-      //   5. AudioWorklet posts Int16 PCM frames → base64 → input.audio
-      //   6. server streams reply.audio (base64 PCM @ 24 kHz) → schedule via
-      //      AudioBufferSourceNode using a running playbackTime cursor.
-      //   7. on reply.done {status:"interrupted"}, stop scheduled sources and
-      //      reset the playbackTime cursor so stale audio is never heard.
-      // -----------------------------------------------------------------------
+      const SAMPLE_RATE = 24_000;
+      const WS_URL =
+        "wss://agents.assemblyai.com/v1/ws";
 
-      const SAMPLE_RATE = 24_000; // audio/pcm default for Voice Agent API
-      const WS_URL = "wss://agents.assemblyai.com/v1/ws";
       const SITE_URLS = {
-  github: "https://github.com",
-  youtube: "https://youtube.com",
-  assemblyai: "https://www.assemblyai.com/docs",
-  gmail: "https://mail.google.com",
-  calendar: "https://calendar.google.com",
-};
+        github: "https://github.com",
+        youtube: "https://youtube.com",
+        assemblyai: "https://www.assemblyai.com/docs",
+        gmail: "https://mail.google.com",
+        calendar: "https://calendar.google.com",
+      };
 
       const els = {
         connect: document.getElementById("connect"),
@@ -319,11 +392,14 @@ Never invent calendar information.
       let micStream = null;
       let workletNode = null;
       let micSource = null;
-      let playbackTime = 0;        // next reply.audio scheduled time (s)
-      let scheduledSources = [];   // for flushing on barge-in
-      let userPartialEl = null; 
-      let pendingToolResults = [];   // streaming partial bubble
-      let pendingToolTasks = [];
+
+      let playbackTime = 0;
+      let scheduledSources = [];
+      let userPartialEl = null;
+
+      let pendingToolResults = [];
+      let activeToolTasks = 0;
+      let toolReplyDone = false;
 
       function setStatus(state, text) {
         els.statusDot.className = "dot " + state;
@@ -337,425 +413,1259 @@ Never invent calendar information.
       }
 
       function ensureBubble(role, partial = false) {
-        if (els.empty.parentNode) els.empty.remove();
+        if (els.empty.parentNode) {
+          els.empty.remove();
+        }
+
         const div = document.createElement("div");
-        div.className = "bubble " + role + (partial ? " partial" : "");
+
+        div.className =
+          "bubble " +
+          role +
+          (partial ? " partial" : "");
+
         els.transcript.appendChild(div);
-        els.transcript.scrollTop = els.transcript.scrollHeight;
+        els.transcript.scrollTop =
+          els.transcript.scrollHeight;
+
         return div;
       }
 
       function addBubble(role, text, meta) {
         const div = ensureBubble(role);
+
         div.textContent = text;
+
         if (meta) {
-          const span = document.createElement("span");
+          const span =
+            document.createElement("span");
+
           span.className = "meta";
           span.textContent = meta;
+
           div.appendChild(span);
         }
-        els.transcript.scrollTop = els.transcript.scrollHeight;
+
+        els.transcript.scrollTop =
+          els.transcript.scrollHeight;
       }
 
       async function fetchToken() {
-        const res = await fetch("/api/voice-token");
-        if (!res.ok) throw new Error("Failed to fetch token: " + res.status);
-        const { token } = await res.json();
+        const response =
+          await fetch("/api/voice-token");
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to fetch token: " +
+              response.status
+          );
+        }
+
+        const { token } =
+          await response.json();
+
         return token;
       }
 
       async function connect() {
         els.connect.disabled = true;
-        setStatus("connecting", "Requesting token…");
+
+        setStatus(
+          "connecting",
+          "Requesting token…"
+        );
 
         let token;
+
         try {
           token = await fetchToken();
         } catch (err) {
           console.error(err);
+
           setStatus("error", "Token error");
+
           els.connect.disabled = false;
+
           return;
         }
 
-        // Force the AudioContext to 24 kHz so we never have to resample.
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: SAMPLE_RATE,
-        });
-        playbackTime = audioCtx.currentTime;
+        audioCtx =
+          new (
+            window.AudioContext ||
+            window.webkitAudioContext
+          )({
+            sampleRate: SAMPLE_RATE,
+          });
+
+        playbackTime =
+          audioCtx.currentTime;
+
         scheduledSources = [];
 
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              channelCount: 1,
-            },
-          });
+          micStream =
+            await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+              },
+            });
         } catch (err) {
-          console.error("Mic permission denied:", err);
-          setStatus("error", "Mic blocked");
+          console.error(
+            "Mic permission denied:",
+            err
+          );
+
+          setStatus(
+            "error",
+            "Mic blocked"
+          );
+
           els.connect.disabled = false;
+
           return;
         }
 
-        await audioCtx.audioWorklet.addModule("pcm-processor.js");
-        micSource = audioCtx.createMediaStreamSource(micStream);
-        workletNode = new AudioWorkletNode(audioCtx, "pcm-processor");
+        await audioCtx.audioWorklet.addModule(
+          "pcm-processor.js"
+        );
 
-        setStatus("connecting", "Connecting…");
-        ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+        micSource =
+          audioCtx.createMediaStreamSource(
+            micStream
+          );
+
+        workletNode =
+          new AudioWorkletNode(
+            audioCtx,
+            "pcm-processor"
+          );
+
+        setStatus(
+          "connecting",
+          "Connecting…"
+        );
+
+        ws = new WebSocket(
+          `${WS_URL}?token=${encodeURIComponent(
+            token
+          )}`
+        );
+
         ws.binaryType = "arraybuffer";
 
         ws.onopen = () => {
+          const now = new Date();
+
+          const today = [
+            now.getFullYear(),
+            String(
+              now.getMonth() + 1
+            ).padStart(2, "0"),
+            String(
+              now.getDate()
+            ).padStart(2, "0"),
+          ].join("-");
+
           ws.send(
             JSON.stringify({
               type: "session.update",
-session: {
-  system_prompt: els.prompt.value,
-  greeting: els.greeting.value,
-  output: { voice: els.voice.value },
 
-tools: [
-{
-  type: "function",
-  name: "open_website",
-  description:
-    "Open one of the supported websites in the user's browser. Use this whenever the user asks to open, launch, visit, or go to one of the supported websites.",
-  parameters: {
-    type: "object",
-    properties: {
-      site: {
-        type: "string",
-        enum: [
-          "github",
-          "youtube",
-          "assemblyai",
-          "gmail",
-          "calendar"
-        ],
-        description:
-          "The supported website the user wants to open.",
-      },
-    },
-    required: ["site"],
-  },
-},
-{
-  type: "function",
-  name: "get_calendar_events",
-  description:
-    "Read the user's Google Calendar for a requested time period.",
-  parameters: {
-    type: "object",
-    properties: {
-      range: {
-        type: "string",
-        enum: [
-          "upcoming",
-          "today",
-          "tomorrow",
-          "this_week",
-          "next_week",
-          "this_month",
-          "next_month"
-        ],
-        description:
-          "The time period of calendar events the user wants to know about.",
-      },
-    },
-    required: ["range"],
-  },
-}
+              session: {
+                system_prompt:
+                  els.prompt.value +
+                  `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
 
-],
-},
-            }),
+                greeting:
+                  els.greeting.value,
+
+                output: {
+                  voice:
+                    els.voice.value,
+                },
+
+                tools: [
+                  {
+                    type: "function",
+
+                    name:
+                      "open_website",
+
+                    description:
+                      "Open one of the supported websites in the user's browser.",
+
+                    parameters: {
+                      type: "object",
+
+                      properties: {
+                        site: {
+                          type:
+                            "string",
+
+                          enum: [
+                            "github",
+                            "youtube",
+                            "assemblyai",
+                            "gmail",
+                            "calendar",
+                          ],
+
+                          description:
+                            "The supported website to open.",
+                        },
+                      },
+
+                      required: [
+                        "site",
+                      ],
+                    },
+                  },
+
+                  {
+                    type: "function",
+
+                    name:
+                      "get_calendar_events",
+
+                    description:
+                      "Check the user's real Google Calendar. ALWAYS call this for ANY question about the user's calendar, schedule, events, commitments, or availability, including exact dates.",
+
+                    parameters: {
+                      type: "object",
+
+                      properties: {
+                        when: {
+                          type:
+                            "string",
+
+                          description:
+                            "The requested time period, for example upcoming, today, tomorrow, this week, next week, this month, next month, September 23rd, Friday, or the 28th.",
+                        },
+                      },
+
+                      required: [
+                        "when",
+                      ],
+                    },
+                  },
+                ],
+              },
+            })
           );
         };
 
-        ws.onmessage = (evt) => handleEvent(JSON.parse(evt.data));
-
-        ws.onerror = (err) => {
-          console.error("WebSocket error:", err);
-          setStatus("error", "Connection error");
+        ws.onmessage = (event) => {
+          handleEvent(
+            JSON.parse(
+              event.data
+            )
+          );
         };
 
-        ws.onclose = (evt) => {
-          console.log("WebSocket closed:", evt.code, evt.reason);
+        ws.onerror = (err) => {
+          console.error(
+            "WebSocket error:",
+            err
+          );
+
+          setStatus(
+            "error",
+            "Connection error"
+          );
+        };
+
+        ws.onclose = (event) => {
+          console.log(
+            "WebSocket closed:",
+            event.code,
+            event.reason
+          );
+
           teardown();
         };
 
-        // Pump mic audio whenever the worklet has a frame ready.
-        workletNode.port.onmessage = (e) => {
-          if (!ws || ws.readyState !== WebSocket.OPEN) return;
-          const audio = arrayBufferToBase64(e.data);
-          ws.send(JSON.stringify({ type: "input.audio", audio }));
+        workletNode.port.onmessage = (
+          event
+        ) => {
+          if (
+            !ws ||
+            ws.readyState !==
+              WebSocket.OPEN
+          ) {
+            return;
+          }
+
+          const audio =
+            arrayBufferToBase64(
+              event.data
+            );
+
+          ws.send(
+            JSON.stringify({
+              type: "input.audio",
+              audio,
+            })
+          );
         };
       }
 
-async function handleEvent(event) {
-  // Don't spam the console with huge audio packets.
-  if (event.type !== "reply.audio") {
-    console.log("AssemblyAI event:", event);
-  }
+      function handleEvent(event) {
+        if (
+          event.type !==
+          "reply.audio"
+        ) {
+          console.log(
+            "AssemblyAI event:",
+            event
+          );
+        }
 
-  switch (event.type) {
-    case "session.ready":
-      setStatus("connected", `Connected (${event.session_id})`);
-      els.disconnect.disabled = false;
-      micSource.connect(workletNode);
-      break;
+        switch (event.type) {
+          case "session.ready":
+            console.log(
+              "READY TOOLS:",
+              JSON.stringify(
+                event.config?.tools,
+                null,
+                2
+              )
+            );
 
-    case "session.updated":
-      console.log("Session configuration applied.");
-      break;
+            setStatus(
+              "connected",
+              `Connected (${event.session_id})`
+            );
 
-    case "transcript.user.delta":
-      if (!userPartialEl) {
-        userPartialEl = ensureBubble("user", true);
+            els.disconnect.disabled =
+              false;
+
+            micSource.connect(
+              workletNode
+            );
+
+            break;
+
+          case "session.updated":
+            console.log(
+              "Session configuration applied."
+            );
+
+            console.log(
+              "SESSION TOOLS:",
+              JSON.stringify(
+                event.config?.tools,
+                null,
+                2
+              )
+            );
+
+            break;
+
+          case "input.speech.started":
+            toolReplyDone = false;
+            break;
+
+          case "transcript.user.delta":
+            if (!userPartialEl) {
+              userPartialEl =
+                ensureBubble(
+                  "user",
+                  true
+                );
+            }
+
+            userPartialEl.textContent =
+              event.text;
+
+            els.transcript.scrollTop =
+              els.transcript.scrollHeight;
+
+            break;
+
+          case "transcript.user":
+            if (userPartialEl) {
+              userPartialEl.classList.remove(
+                "partial"
+              );
+
+              userPartialEl.textContent =
+                event.text;
+
+              userPartialEl = null;
+            } else {
+              addBubble(
+                "user",
+                event.text
+              );
+            }
+
+            break;
+
+          case "reply.started":
+            toolReplyDone = false;
+            break;
+
+          case "reply.audio":
+            playPCM(
+              event.data
+            );
+            break;
+
+          case "transcript.agent": {
+            const meta =
+              event.interrupted
+                ? "interrupted"
+                : null;
+
+            addBubble(
+              "agent",
+              event.text,
+              meta
+            );
+
+            break;
+          }
+
+          case "tool.call":
+            activeToolTasks++;
+
+            handleToolCall(event)
+              .catch((err) => {
+                console.error(
+                  "Tool handler failed:",
+                  err
+                );
+              })
+              .finally(() => {
+                activeToolTasks--;
+
+                maybeSendToolResults();
+              });
+
+            break;
+
+          case "reply.done":
+            if (
+              event.status ===
+              "interrupted"
+            ) {
+              flushPlayback();
+
+              pendingToolResults = [];
+              activeToolTasks = 0;
+              toolReplyDone = false;
+            } else {
+              toolReplyDone = true;
+
+              maybeSendToolResults();
+            }
+
+            break;
+
+          case "session.error":
+            console.error(
+              "Session error:",
+              event
+            );
+
+            setStatus(
+              "error",
+              `${event.code}: ${event.message}`
+            );
+
+            break;
+        }
       }
 
-      userPartialEl.textContent = event.text;
-      els.transcript.scrollTop = els.transcript.scrollHeight;
-      break;
+      async function handleToolCall(
+        event
+      ) {
+        console.log(
+          "TOOL CALLED:",
+          event.name,
+          event.arguments
+        );
 
-    case "transcript.user":
-      if (userPartialEl) {
-        userPartialEl.classList.remove("partial");
-        userPartialEl.textContent = event.text;
-        userPartialEl = null;
-      } else {
-        addBubble("user", event.text);
+        // ---------------------------------
+        // OPEN WEBSITE
+        // ---------------------------------
+
+        if (
+          event.name ===
+          "open_website"
+        ) {
+          const site =
+            event.arguments?.site;
+
+          const url =
+            SITE_URLS[site];
+
+          if (!url) {
+            pendingToolResults.push({
+              call_id:
+                event.call_id,
+
+              result: {
+                success: false,
+
+                error:
+                  `Unsupported website: ${site}`,
+              },
+            });
+
+            return;
+          }
+
+          try {
+            console.log(
+              `Opening ${site}:`,
+              url
+            );
+
+            const openedWindow =
+              window.open(
+                url,
+                "_blank"
+              );
+
+            if (!openedWindow) {
+              throw new Error(
+                "The browser blocked the new tab."
+              );
+            }
+
+            pendingToolResults.push({
+              call_id:
+                event.call_id,
+
+              result: {
+                success: true,
+                site,
+                url,
+              },
+            });
+          } catch (err) {
+            pendingToolResults.push({
+              call_id:
+                event.call_id,
+
+              result: {
+                success: false,
+
+                error:
+                  err.message,
+              },
+            });
+          }
+
+          return;
+        }
+
+        // ---------------------------------
+        // GOOGLE CALENDAR
+        // ---------------------------------
+
+        if (
+          event.name ===
+          "get_calendar_events"
+        ) {
+          try {
+            const when =
+              event.arguments?.when;
+
+            if (!when) {
+              throw new Error(
+                "Calendar time period is required."
+              );
+            }
+
+            console.log(
+              "CALENDAR TOOL FIRED!"
+            );
+
+            console.log(
+              "Requested time:",
+              when
+            );
+
+            const request =
+              resolveCalendarRequest(
+                when
+              );
+
+            console.log(
+              "Resolved calendar request:",
+              request
+            );
+
+            let url;
+
+            if (
+              request.type ===
+              "range"
+            ) {
+              url =
+                `/api/calendar/events?range=${encodeURIComponent(
+                  request.range
+                )}`;
+            } else {
+              url =
+                `/api/calendar/date?date=${encodeURIComponent(
+                  request.date
+                )}`;
+            }
+
+            console.log(
+              "Fetching:",
+              url
+            );
+
+            const response =
+              await fetch(url);
+
+            if (!response.ok) {
+              const errorText =
+                await response.text();
+
+              throw new Error(
+                `Calendar request failed with status ${response.status}: ${errorText}`
+              );
+            }
+
+            const data =
+              await response.json();
+
+            console.log(
+              "Calendar result:",
+              data
+            );
+
+            pendingToolResults.push({
+              call_id:
+                event.call_id,
+
+              result: {
+                success: true,
+
+                requested_when:
+                  when,
+
+                timezone:
+                  data.timezone,
+
+                events:
+                  data.events || [],
+              },
+            });
+          } catch (err) {
+            console.error(
+              "Calendar tool failed:",
+              err
+            );
+
+            pendingToolResults.push({
+              call_id:
+                event.call_id,
+
+              result: {
+                success: false,
+
+                error:
+                  err.message,
+              },
+            });
+          }
+
+          return;
+        }
+
+        // ---------------------------------
+        // UNKNOWN TOOL
+        // ---------------------------------
+
+        pendingToolResults.push({
+          call_id:
+            event.call_id,
+
+          result: {
+            success: false,
+
+            error:
+              `Unknown tool: ${event.name}`,
+          },
+        });
       }
-      break;
 
-    case "reply.audio":
-      playPCM(event.data);
-      break;
+      function resolveCalendarRequest(
+        when
+      ) {
+        const original =
+          String(when).trim();
 
-    case "transcript.agent": {
-      const meta = event.interrupted ? "interrupted" : null;
-      addBubble("agent", event.text, meta);
-      break;
-    }
+        const normalized =
+          original
+            .toLowerCase()
+            .replace(/[,.?]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
 
-    case "tool.call":
-      pendingToolTasks.push(handleToolCall(event));
-      break;
+        const ranges = {
+          upcoming:
+            "upcoming",
 
-    case "reply.done":
-  if (event.status === "interrupted") {
-    flushPlayback();
-    pendingToolResults = [];
-    pendingToolTasks = [];
-  } else {
-    await Promise.all(pendingToolTasks);
-    pendingToolTasks = [];
+          "next event":
+            "upcoming",
 
-    sendPendingToolResults();
-  }
-  break;
+          "what's coming up":
+            "upcoming",
 
-    case "session.error":
-      console.error("Session error:", event);
-      setStatus("error", `${event.code}: ${event.message}`);
-      break;
-  }
-}
+          today:
+            "today",
 
-async function handleToolCall(event) {
-  console.log("TOOL CALLED:", event.name, event.arguments);
+          tomorrow:
+            "tomorrow",
 
-  if (event.name === "open_website") {
-    const site = event.arguments?.site;
-    const url = SITE_URLS[site];
+          "this week":
+            "this_week",
 
-    if (!url) {
-      pendingToolResults.push({
-        call_id: event.call_id,
-        result: {
-          success: false,
-          error: `Unsupported website: ${site}`,
-        },
-      });
+          "next week":
+            "next_week",
 
-      return;
-    }
+          "this month":
+            "this_month",
 
-    try {
-      console.log(`Opening ${site}:`, url);
+          "next month":
+            "next_month",
+        };
 
-      const openedWindow = window.open(url, "_blank");
+        if (
+          ranges[normalized]
+        ) {
+          return {
+            type: "range",
 
-      if (!openedWindow) {
-        throw new Error("The browser blocked the new tab.");
+            range:
+              ranges[normalized],
+          };
+        }
+
+        const isoMatch =
+          normalized.match(
+            /^(\d{4})-(\d{2})-(\d{2})$/
+          );
+
+        if (isoMatch) {
+          return {
+            type: "date",
+
+            date:
+              normalized,
+          };
+        }
+
+        const monthNames = {
+          january: 0,
+          february: 1,
+          march: 2,
+          april: 3,
+          may: 4,
+          june: 5,
+          july: 6,
+          august: 7,
+          september: 8,
+          october: 9,
+          november: 10,
+          december: 11,
+        };
+
+        const monthPattern =
+          Object.keys(
+            monthNames
+          ).join("|");
+
+        const monthDateMatch =
+          normalized.match(
+            new RegExp(
+              `(?:on )?(${monthPattern})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(\\d{4}))?`
+            )
+          );
+
+        if (monthDateMatch) {
+          const month =
+            monthNames[
+              monthDateMatch[1]
+            ];
+
+          const day =
+            Number(
+              monthDateMatch[2]
+            );
+
+          const now =
+            new Date();
+
+          let year =
+            monthDateMatch[3]
+              ? Number(
+                  monthDateMatch[3]
+                )
+              : now.getFullYear();
+
+          let date =
+            new Date(
+              year,
+              month,
+              day
+            );
+
+          if (
+            !monthDateMatch[3] &&
+            date <
+              new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate()
+              )
+          ) {
+            year++;
+            date = new Date(
+              year,
+              month,
+              day
+            );
+          }
+
+          if (
+            date.getMonth() !==
+              month ||
+            date.getDate() !==
+              day
+          ) {
+            throw new Error(
+              `Invalid calendar date: ${original}`
+            );
+          }
+
+          return {
+            type: "date",
+
+            date:
+              formatLocalDate(
+                date
+              ),
+          };
+        }
+
+        const weekdays = {
+          sunday: 0,
+          monday: 1,
+          tuesday: 2,
+          wednesday: 3,
+          thursday: 4,
+          friday: 5,
+          saturday: 6,
+        };
+
+        const weekday =
+          Object.keys(
+            weekdays
+          ).find((name) =>
+            normalized.includes(
+              name
+            )
+          );
+
+        if (weekday) {
+          const now =
+            new Date();
+
+          const target =
+            weekdays[weekday];
+
+          let daysAhead =
+            (
+              target -
+              now.getDay() +
+              7
+            ) % 7;
+
+          if (
+            normalized.startsWith(
+              "next "
+            ) &&
+            daysAhead === 0
+          ) {
+            daysAhead = 7;
+          }
+
+          const date =
+            new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() +
+                daysAhead
+            );
+
+          return {
+            type: "date",
+
+            date:
+              formatLocalDate(
+                date
+              ),
+          };
+        }
+
+        const dayOnlyMatch =
+          normalized.match(
+            /(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?$/
+          );
+
+        if (dayOnlyMatch) {
+          const requestedDay =
+            Number(
+              dayOnlyMatch[1]
+            );
+
+          if (
+            requestedDay < 1 ||
+            requestedDay > 31
+          ) {
+            throw new Error(
+              `Invalid calendar day: ${requestedDay}`
+            );
+          }
+
+          const now =
+            new Date();
+
+          for (
+            let offset = 0;
+            offset < 14;
+            offset++
+          ) {
+            const candidate =
+              new Date(
+                now.getFullYear(),
+                now.getMonth() +
+                  offset,
+                requestedDay
+              );
+
+            if (
+              candidate.getDate() !==
+              requestedDay
+            ) {
+              continue;
+            }
+
+            const today =
+              new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate()
+              );
+
+            if (
+              candidate >=
+              today
+            ) {
+              return {
+                type: "date",
+
+                date:
+                  formatLocalDate(
+                    candidate
+                  ),
+              };
+            }
+          }
+        }
+
+        throw new Error(
+          `I couldn't understand the calendar period: "${original}"`
+        );
       }
 
-      pendingToolResults.push({
-        call_id: event.call_id,
-        result: {
-          success: true,
-          site,
-          url,
-        },
-      });
-    } catch (err) {
-      pendingToolResults.push({
-        call_id: event.call_id,
-        result: {
-          success: false,
-          error: err.message,
-        },
-      });
-    }
+      function formatLocalDate(
+        date
+      ) {
+        return [
+          date.getFullYear(),
 
-    return;
-  }
+          String(
+            date.getMonth() + 1
+          ).padStart(2, "0"),
 
- if (event.name === "get_calendar_events") {
-  try {
-    const range = event.arguments?.range || "upcoming";
+          String(
+            date.getDate()
+          ).padStart(2, "0"),
+        ].join("-");
+      }
 
-    console.log("Fetching calendar:", range);
+      function maybeSendToolResults() {
+        if (!toolReplyDone) {
+          return;
+        }
 
-    const response = await fetch(
-      `/api/calendar/events?range=${encodeURIComponent(range)}`
-    );
+        if (
+          activeToolTasks > 0
+        ) {
+          return;
+        }
 
-    if (!response.ok) {
-      throw new Error(
-        `Calendar request failed with status ${response.status}`
-      );
-    }
+        if (
+          pendingToolResults.length ===
+          0
+        ) {
+          return;
+        }
 
-    const data = await response.json();
+        console.log(
+          "Sending tool results:",
+          pendingToolResults
+        );
 
-    console.log("Calendar result:", data);
+        sendPendingToolResults();
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: true,
-        range,
-        timezone: data.timezone,
-        events: data.events,
-      },
-    });
-  } catch (err) {
-    console.error("Calendar tool failed:", err);
+        toolReplyDone = false;
+      }
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: false,
-        error: err.message,
-      },
-    });
-  }
+      function sendPendingToolResults() {
+        if (
+          !ws ||
+          ws.readyState !==
+            WebSocket.OPEN
+        ) {
+          return;
+        }
 
-  return;
-}
+        for (
+          const tool of
+          pendingToolResults
+        ) {
+          ws.send(
+            JSON.stringify({
+              type:
+                "tool.result",
 
-  pendingToolResults.push({
-    call_id: event.call_id,
-    result: {
-      success: false,
-      error: `Unknown tool: ${event.name}`,
-    },
-  });
-}
+              call_id:
+                tool.call_id,
 
-function sendPendingToolResults() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
+              result:
+                JSON.stringify(
+                  tool.result
+                ),
+            })
+          );
+        }
 
-  for (const tool of pendingToolResults) {
-    ws.send(
-      JSON.stringify({
-        type: "tool.result",
-        call_id: tool.call_id,
-        result: JSON.stringify(tool.result),
-      }),
-    );
-  }
+        pendingToolResults = [];
+      }
 
-  pendingToolResults = [];
-}
       function playPCM(b64) {
-        // Decode base64 → Int16 → Float32, then schedule on the playback cursor.
-        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-        const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
-        const float32 = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 0x8000;
+        const bytes =
+          Uint8Array.from(
+            atob(b64),
+            (char) =>
+              char.charCodeAt(0)
+          );
 
-        const buffer = audioCtx.createBuffer(1, float32.length, SAMPLE_RATE);
-        buffer.getChannelData(0).set(float32);
+        const int16 =
+          new Int16Array(
+            bytes.buffer,
+            bytes.byteOffset,
+            bytes.byteLength / 2
+          );
 
-        const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
+        const float32 =
+          new Float32Array(
+            int16.length
+          );
 
-        const now = audioCtx.currentTime;
-        if (playbackTime < now) playbackTime = now;
-        source.start(playbackTime);
-        playbackTime += buffer.duration;
+        for (
+          let i = 0;
+          i < int16.length;
+          i++
+        ) {
+          float32[i] =
+            int16[i] /
+            0x8000;
+        }
 
-        scheduledSources.push(source);
+        const buffer =
+          audioCtx.createBuffer(
+            1,
+            float32.length,
+            SAMPLE_RATE
+          );
+
+        buffer
+          .getChannelData(0)
+          .set(float32);
+
+        const source =
+          audioCtx.createBufferSource();
+
+        source.buffer =
+          buffer;
+
+        source.connect(
+          audioCtx.destination
+        );
+
+        const now =
+          audioCtx.currentTime;
+
+        if (
+          playbackTime < now
+        ) {
+          playbackTime = now;
+        }
+
+        source.start(
+          playbackTime
+        );
+
+        playbackTime +=
+          buffer.duration;
+
+        scheduledSources.push(
+          source
+        );
+
         source.onended = () => {
-          scheduledSources = scheduledSources.filter((s) => s !== source);
+          scheduledSources =
+            scheduledSources.filter(
+              (item) =>
+                item !== source
+            );
         };
       }
 
       function flushPlayback() {
-        // User barged in — drop everything we'd queued for the agent.
-        for (const src of scheduledSources) {
-          try { src.stop(); } catch (_) {}
+        for (
+          const source of
+          scheduledSources
+        ) {
+          try {
+            source.stop();
+          } catch (_) {}
         }
+
         scheduledSources = [];
-        playbackTime = audioCtx.currentTime;
+
+        if (audioCtx) {
+          playbackTime =
+            audioCtx.currentTime;
+        }
       }
 
       function teardown() {
-        try { workletNode && workletNode.disconnect(); } catch (_) {}
-        try { micSource && micSource.disconnect(); } catch (_) {}
-        try { micStream && micStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
-        try { audioCtx && audioCtx.close(); } catch (_) {}
+        try {
+          workletNode?.disconnect();
+        } catch (_) {}
+
+        try {
+          micSource?.disconnect();
+        } catch (_) {}
+
+        try {
+          micStream
+            ?.getTracks()
+            .forEach((track) =>
+              track.stop()
+            );
+        } catch (_) {}
+
+        try {
+          audioCtx?.close();
+        } catch (_) {}
+
         ws = null;
         audioCtx = null;
         micStream = null;
         workletNode = null;
         micSource = null;
+
         scheduledSources = [];
         userPartialEl = null;
+
         pendingToolResults = [];
-        pendingToolTasks = [];
-        setStatus("", "Disconnected");
-        els.connect.disabled = false;
-        els.disconnect.disabled = true;
+        activeToolTasks = 0;
+        toolReplyDone = false;
+
+        setStatus(
+          "",
+          "Disconnected"
+        );
+
+        els.connect.disabled =
+          false;
+
+        els.disconnect.disabled =
+          true;
       }
 
       function disconnect() {
-        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
-        else teardown();
+        if (
+          ws &&
+          ws.readyState ===
+            WebSocket.OPEN
+        ) {
+          ws.close();
+        } else {
+          teardown();
+        }
       }
 
-      function arrayBufferToBase64(buf) {
-        const bytes = new Uint8Array(buf);
+      function arrayBufferToBase64(
+        buffer
+      ) {
+        const bytes =
+          new Uint8Array(
+            buffer
+          );
+
         let binary = "";
-        const chunk = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunk) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+
+        const chunk =
+          0x8000;
+
+        for (
+          let i = 0;
+          i < bytes.length;
+          i += chunk
+        ) {
+          binary +=
+            String.fromCharCode.apply(
+              null,
+              bytes.subarray(
+                i,
+                i + chunk
+              )
+            );
         }
+
         return btoa(binary);
       }
 
-      els.connect.addEventListener("click", connect);
-      els.disconnect.addEventListener("click", disconnect);
-      els.clear.addEventListener("click", clearTranscript);
+      els.connect.addEventListener(
+        "click",
+        connect
+      );
+
+      els.disconnect.addEventListener(
+        "click",
+        disconnect
+      );
+
+      els.clear.addEventListener(
+        "click",
+        clearTranscript
+      );
     </script>
   </body>
 </html>

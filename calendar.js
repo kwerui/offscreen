@@ -114,3 +114,50 @@ export async function getCalendarEvents(range = "upcoming") {
     })),
   };
 }
+
+export async function getCalendarEventsForDate(date) {
+  const auth = await getAuthClient();
+
+  const calendar = google.calendar({
+    version: "v3",
+    auth,
+  });
+
+  const calendarInfo = await calendar.calendars.get({
+    calendarId: "primary",
+  });
+
+  const timezone = calendarInfo.data.timeZone || "UTC";
+
+  const day = DateTime.fromISO(date, {
+    zone: timezone,
+  });
+
+  if (!day.isValid) {
+    throw new Error("Invalid date");
+  }
+
+  const response = await calendar.events.list({
+    calendarId: "primary",
+    timeMin: day.startOf("day").toUTC().toISO(),
+    timeMax: day.endOf("day").toUTC().toISO(),
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+
+  return {
+    date,
+    timezone,
+    events: (response.data.items || []).map((event) => ({
+      title: event.summary || "Untitled event",
+      start:
+        event.start?.dateTime ??
+        event.start?.date ??
+        null,
+      end:
+        event.end?.dateTime ??
+        event.end?.date ??
+        null,
+    })),
+  };
+}
