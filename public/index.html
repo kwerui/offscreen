@@ -229,18 +229,13 @@ Keep spoken responses brief and natural.
 
 You can open supported websites using the open_website tool.
 
-Supported websites:
-- GitHub
-- YouTube
-- AssemblyAI documentation
-- Gmail
-- Google Calendar
+You can check the user's real Google Calendar using the get_upcoming_events tool.
 
-Whenever the user asks to open, launch, visit, or go to one of these websites, use the open_website tool immediately.
+Whenever the user asks about their calendar, schedule, next event, upcoming events, or what they have coming up, use get_upcoming_events.
 
-Do not claim an action succeeded until the tool reports success.
+Never invent calendar information. Base calendar answers only on the tool result.
 
-If the requested website is not supported, briefly tell the user that it is not available yet. </textarea>
+Do not claim an action succeeded until its tool reports success. </textarea>
         </div>
       </div>
 
@@ -312,6 +307,7 @@ If the requested website is not supported, briefly tell the user that it is not 
       let scheduledSources = [];   // for flushing on barge-in
       let userPartialEl = null; 
       let pendingToolResults = [];   // streaming partial bubble
+      let pendingToolTasks = [];
 
       function setStatus(state, text) {
         els.statusDot.className = "dot " + state;
@@ -430,7 +426,19 @@ tools: [
     },
     required: ["site"],
   },
+},
+{
+  type: "function",
+  name: "get_upcoming_events",
+  description:
+    "Get the user's upcoming Google Calendar events. Use this whenever the user asks about their calendar, schedule, next event, or upcoming commitments.",
+  parameters: {
+    type: "object",
+    properties: {},
+    required: [],
+  },
 }
+
 ],
 },
             }),
@@ -457,7 +465,7 @@ tools: [
         };
       }
 
-function handleEvent(event) {
+async function handleEvent(event) {
   // Don't spam the console with huge audio packets.
   if (event.type !== "reply.audio") {
     console.log("AssemblyAI event:", event);
@@ -504,17 +512,21 @@ function handleEvent(event) {
     }
 
     case "tool.call":
-      handleToolCall(event);
+      pendingToolTasks.push(handleToolCall(event));
       break;
 
     case "reply.done":
-      if (event.status === "interrupted") {
-        flushPlayback();
-        pendingToolResults = [];
-      } else {
-        sendPendingToolResults();
-      }
-      break;
+  if (event.status === "interrupted") {
+    flushPlayback();
+    pendingToolResults = [];
+    pendingToolTasks = [];
+  } else {
+    await Promise.all(pendingToolTasks);
+    pendingToolTasks = [];
+
+    sendPendingToolResults();
+  }
+  break;
 
     case "session.error":
       console.error("Session error:", event);
@@ -523,64 +535,100 @@ function handleEvent(event) {
   }
 }
 
-function handleToolCall(event) {
+async function handleToolCall(event) {
   console.log("TOOL CALLED:", event.name, event.arguments);
 
-  if (event.name !== "open_website") {
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: false,
-        error: `Unknown tool: ${event.name}`,
-      },
-    });
+  if (event.name === "open_website") {
+    const site = event.arguments?.site;
+    const url = SITE_URLS[site];
 
-    return;
-  }
+    if (!url) {
+      pendingToolResults.push({
+        call_id: event.call_id,
+        result: {
+          success: false,
+          error: `Unsupported website: ${site}`,
+        },
+      });
 
-  const site = event.arguments?.site;
-  const url = SITE_URLS[site];
-
-  if (!url) {
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: false,
-        error: `Unsupported website: ${site}`,
-      },
-    });
-
-    return;
-  }
-
-  try {
-    console.log(`Opening ${site}:`, url);
-
-    const openedWindow = window.open(url, "_blank");
-
-    if (!openedWindow) {
-      throw new Error("The browser blocked the new tab.");
+      return;
     }
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: true,
-        site,
-        url,
-      },
-    });
-  } catch (err) {
-    console.error("open_website failed:", err);
+    try {
+      console.log(`Opening ${site}:`, url);
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: false,
-        error: err.message,
-      },
-    });
+      const openedWindow = window.open(url, "_blank");
+
+      if (!openedWindow) {
+        throw new Error("The browser blocked the new tab.");
+      }
+
+      pendingToolResults.push({
+        call_id: event.call_id,
+        result: {
+          success: true,
+          site,
+          url,
+        },
+      });
+    } catch (err) {
+      pendingToolResults.push({
+        call_id: event.call_id,
+        result: {
+          success: false,
+          error: err.message,
+        },
+      });
+    }
+
+    return;
   }
+
+  if (event.name === "get_upcoming_events") {
+    try {
+      console.log("Fetching Google Calendar events...");
+
+      const response = await fetch("/api/calendar/upcoming");
+
+      if (!response.ok) {
+        throw new Error(
+          `Calendar request failed with status ${response.status}`,
+        );
+      }
+
+      const data = await response.json();
+
+      console.log("Calendar events:", data.events);
+
+      pendingToolResults.push({
+        call_id: event.call_id,
+        result: {
+          success: true,
+          events: data.events,
+        },
+      });
+    } catch (err) {
+      console.error("Calendar tool failed:", err);
+
+      pendingToolResults.push({
+        call_id: event.call_id,
+        result: {
+          success: false,
+          error: err.message,
+        },
+      });
+    }
+
+    return;
+  }
+
+  pendingToolResults.push({
+    call_id: event.call_id,
+    result: {
+      success: false,
+      error: `Unknown tool: ${event.name}`,
+    },
+  });
 }
 
 function sendPendingToolResults() {
@@ -647,6 +695,7 @@ function sendPendingToolResults() {
         scheduledSources = [];
         userPartialEl = null;
         pendingToolResults = [];
+        pendingToolTasks = [];
         setStatus("", "Disconnected");
         els.connect.disabled = false;
         els.disconnect.disabled = true;

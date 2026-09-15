@@ -6,7 +6,7 @@
 //      so the AssemblyAI API key never leaves the server.
 //
 // The browser fetches a fresh token before every WebSocket connection.
-
+import { getUpcomingEvents } from "./calendar.js";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -46,6 +46,22 @@ app.get("/api/voice-token", async (_req, res) => {
   } catch (err) {
     console.error("Token mint error:", err);
     res.status(500).json({ error: "Internal error" });
+  }
+});
+
+app.get("/api/calendar/upcoming", async (_req, res) => {
+  try {
+    const events = await getUpcomingEvents(5);
+
+    res.json({
+      events,
+    });
+  } catch (err) {
+    console.error("Calendar error:", err);
+
+    res.status(500).json({
+      error: "Failed to fetch calendar events",
+    });
   }
 });
 
