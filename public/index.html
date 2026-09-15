@@ -182,7 +182,7 @@
   <body>
     <div class="app">
       <header>
-        <h1>Voice Assistant</h1>
+        <h1>Offscreen</h1>
         <span class="status" id="status">
           <span class="dot" id="status-dot"></span>
           <span id="status-text">Disconnected</span>
@@ -221,7 +221,19 @@
         </div>
         <div class="full">
           <label for="prompt">System prompt</label>
-          <textarea id="prompt">You are a friendly voice assistant. Keep replies to one or two short sentences. Speak naturally, like a real person.</textarea>
+<textarea id="prompt">You are Offscreen, a voice-first computer companion.
+
+Keep replies short and natural.
+
+You have a tool called open_github.
+
+If the user asks to open GitHub, launch GitHub, visit GitHub, go to GitHub, or anything equivalent, you MUST call open_github immediately.
+
+Do not ask which website they mean.
+Do not say you cannot do it.
+Do not merely tell the user how to open GitHub yourself.
+
+Use the tool. </textarea>
         </div>
       </div>
 
@@ -284,7 +296,8 @@
       let micSource = null;
       let playbackTime = 0;        // next reply.audio scheduled time (s)
       let scheduledSources = [];   // for flushing on barge-in
-      let userPartialEl = null;    // streaming partial bubble
+      let userPartialEl = null; 
+      let pendingToolResults = [];   // streaming partial bubble
 
       function setStatus(state, text) {
         els.statusDot.className = "dot " + state;
@@ -374,11 +387,25 @@
           ws.send(
             JSON.stringify({
               type: "session.update",
-              session: {
-                system_prompt: els.prompt.value,
-                greeting: els.greeting.value,
-                output: { voice: els.voice.value },
-              },
+session: {
+  system_prompt: els.prompt.value,
+  greeting: els.greeting.value,
+  output: { voice: els.voice.value },
+
+tools: [
+  {
+    type: "function",
+    name: "open_github",
+    description:
+      "Open GitHub in the user's browser. ALWAYS use this tool whenever the user asks to open, launch, visit, or go to GitHub.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+],
+},
             }),
           );
         };
@@ -403,56 +430,131 @@
         };
       }
 
-      function handleEvent(event) {
-        switch (event.type) {
-          case "session.ready":
-            setStatus("connected", `Connected (${event.session_id})`);
-            els.disconnect.disabled = false;
-            // Now safe to start sending audio.
-            micSource.connect(workletNode);
-            // Don't connect worklet to destination — we don't want mic in speakers.
-            break;
+function handleEvent(event) {
+  // Don't spam the console with huge audio packets.
+  if (event.type !== "reply.audio") {
+    console.log("AssemblyAI event:", event);
+  }
 
-          case "transcript.user.delta":
-            if (!userPartialEl) userPartialEl = ensureBubble("user", true);
-            userPartialEl.textContent = event.text;
-            els.transcript.scrollTop = els.transcript.scrollHeight;
-            break;
+  switch (event.type) {
+    case "session.ready":
+      setStatus("connected", `Connected (${event.session_id})`);
+      els.disconnect.disabled = false;
+      micSource.connect(workletNode);
+      break;
 
-          case "transcript.user":
-            if (userPartialEl) {
-              userPartialEl.classList.remove("partial");
-              userPartialEl.textContent = event.text;
-              userPartialEl = null;
-            } else {
-              addBubble("user", event.text);
-            }
-            break;
+    case "session.updated":
+      console.log("Session configuration applied.");
+      break;
 
-          case "reply.audio":
-            playPCM(event.data);
-            break;
-
-          case "transcript.agent": {
-            const meta = event.interrupted ? "interrupted" : null;
-            addBubble("agent", event.text, meta);
-            break;
-          }
-
-          case "reply.done":
-            if (event.status === "interrupted") flushPlayback();
-            break;
-
-          case "session.error":
-            console.error("Session error:", event);
-            setStatus("error", `${event.code}: ${event.message}`);
-            break;
-
-          // session.updated, input.speech.started, input.speech.stopped,
-          // reply.started, tool.call — handled implicitly or out of scope.
-        }
+    case "transcript.user.delta":
+      if (!userPartialEl) {
+        userPartialEl = ensureBubble("user", true);
       }
 
+      userPartialEl.textContent = event.text;
+      els.transcript.scrollTop = els.transcript.scrollHeight;
+      break;
+
+    case "transcript.user":
+      if (userPartialEl) {
+        userPartialEl.classList.remove("partial");
+        userPartialEl.textContent = event.text;
+        userPartialEl = null;
+      } else {
+        addBubble("user", event.text);
+      }
+      break;
+
+    case "reply.audio":
+      playPCM(event.data);
+      break;
+
+    case "transcript.agent": {
+      const meta = event.interrupted ? "interrupted" : null;
+      addBubble("agent", event.text, meta);
+      break;
+    }
+
+    case "tool.call":
+      handleToolCall(event);
+      break;
+
+    case "reply.done":
+      if (event.status === "interrupted") {
+        flushPlayback();
+        pendingToolResults = [];
+      } else {
+        sendPendingToolResults();
+      }
+      break;
+
+    case "session.error":
+      console.error("Session error:", event);
+      setStatus("error", `${event.code}: ${event.message}`);
+      break;
+  }
+}
+
+function handleToolCall(event) {
+  console.log("🔥 TOOL CALLED:", event.name, event.arguments);
+
+  if (event.name !== "open_github") {
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: false,
+        error: `Unknown tool: ${event.name}`,
+      },
+    });
+    return;
+  }
+
+  try {
+    console.log("🔥 OPENING GITHUB");
+
+    const openedWindow = window.open(
+      "https://github.com",
+      "_blank"
+    );
+
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: true,
+        url: "https://github.com",
+      },
+    });
+  } catch (err) {
+    console.error("open_github failed:", err);
+
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: false,
+        error: err.message,
+      },
+    });
+  }
+}
+
+function sendPendingToolResults() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  for (const tool of pendingToolResults) {
+    ws.send(
+      JSON.stringify({
+        type: "tool.result",
+        call_id: tool.call_id,
+        result: JSON.stringify(tool.result),
+      }),
+    );
+  }
+
+  pendingToolResults = [];
+}
       function playPCM(b64) {
         // Decode base64 → Int16 → Float32, then schedule on the playback cursor.
         const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -499,6 +601,7 @@
         micSource = null;
         scheduledSources = [];
         userPartialEl = null;
+        pendingToolResults = [];
         setStatus("", "Disconnected");
         els.connect.disabled = false;
         els.disconnect.disabled = true;
