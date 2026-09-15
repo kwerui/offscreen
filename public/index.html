@@ -223,17 +223,24 @@
           <label for="prompt">System prompt</label>
 <textarea id="prompt">You are Offscreen, a voice-first computer companion.
 
-Keep replies short and natural.
+Your purpose is to help the user complete routine digital tasks while reducing unnecessary screen and keyboard interaction.
 
-You have a tool called open_github.
+Keep spoken responses brief and natural.
 
-If the user asks to open GitHub, launch GitHub, visit GitHub, go to GitHub, or anything equivalent, you MUST call open_github immediately.
+You can open supported websites using the open_website tool.
 
-Do not ask which website they mean.
-Do not say you cannot do it.
-Do not merely tell the user how to open GitHub yourself.
+Supported websites:
+- GitHub
+- YouTube
+- AssemblyAI documentation
+- Gmail
+- Google Calendar
 
-Use the tool. </textarea>
+Whenever the user asks to open, launch, visit, or go to one of these websites, use the open_website tool immediately.
+
+Do not claim an action succeeded until the tool reports success.
+
+If the requested website is not supported, briefly tell the user that it is not available yet. </textarea>
         </div>
       </div>
 
@@ -275,6 +282,13 @@ Use the tool. </textarea>
 
       const SAMPLE_RATE = 24_000; // audio/pcm default for Voice Agent API
       const WS_URL = "wss://agents.assemblyai.com/v1/ws";
+      const SITE_URLS = {
+  github: "https://github.com",
+  youtube: "https://youtube.com",
+  assemblyai: "https://www.assemblyai.com/docs",
+  gmail: "https://mail.google.com",
+  calendar: "https://calendar.google.com",
+};
 
       const els = {
         connect: document.getElementById("connect"),
@@ -393,17 +407,30 @@ session: {
   output: { voice: els.voice.value },
 
 tools: [
-  {
-    type: "function",
-    name: "open_github",
-    description:
-      "Open GitHub in the user's browser. ALWAYS use this tool whenever the user asks to open, launch, visit, or go to GitHub.",
-    parameters: {
-      type: "object",
-      properties: {},
-      required: [],
+{
+  type: "function",
+  name: "open_website",
+  description:
+    "Open one of the supported websites in the user's browser. Use this whenever the user asks to open, launch, visit, or go to one of the supported websites.",
+  parameters: {
+    type: "object",
+    properties: {
+      site: {
+        type: "string",
+        enum: [
+          "github",
+          "youtube",
+          "assemblyai",
+          "gmail",
+          "calendar"
+        ],
+        description:
+          "The supported website the user wants to open.",
+      },
     },
+    required: ["site"],
   },
+}
 ],
 },
             }),
@@ -497,9 +524,9 @@ function handleEvent(event) {
 }
 
 function handleToolCall(event) {
-  console.log("🔥 TOOL CALLED:", event.name, event.arguments);
+  console.log("TOOL CALLED:", event.name, event.arguments);
 
-  if (event.name !== "open_github") {
+  if (event.name !== "open_website") {
     pendingToolResults.push({
       call_id: event.call_id,
       result: {
@@ -507,26 +534,44 @@ function handleToolCall(event) {
         error: `Unknown tool: ${event.name}`,
       },
     });
+
+    return;
+  }
+
+  const site = event.arguments?.site;
+  const url = SITE_URLS[site];
+
+  if (!url) {
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: false,
+        error: `Unsupported website: ${site}`,
+      },
+    });
+
     return;
   }
 
   try {
-    console.log("🔥 OPENING GITHUB");
+    console.log(`Opening ${site}:`, url);
 
-    const openedWindow = window.open(
-      "https://github.com",
-      "_blank"
-    );
+    const openedWindow = window.open(url, "_blank");
+
+    if (!openedWindow) {
+      throw new Error("The browser blocked the new tab.");
+    }
 
     pendingToolResults.push({
       call_id: event.call_id,
       result: {
         success: true,
-        url: "https://github.com",
+        site,
+        url,
       },
     });
   } catch (err) {
-    console.error("open_github failed:", err);
+    console.error("open_website failed:", err);
 
     pendingToolResults.push({
       call_id: event.call_id,
