@@ -6,7 +6,7 @@
 //      so the AssemblyAI API key never leaves the server.
 //
 // The browser fetches a fresh token before every WebSocket connection.
-import { getUpcomingEvents } from "./calendar.js";
+import { getCalendarEvents } from "./calendar.js";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -49,13 +49,29 @@ app.get("/api/voice-token", async (_req, res) => {
   }
 });
 
-app.get("/api/calendar/upcoming", async (_req, res) => {
+app.get("/api/calendar/events", async (req, res) => {
   try {
-    const events = await getUpcomingEvents(5);
+    const range = req.query.range || "upcoming";
 
-    res.json({
-      events,
-    });
+    const allowedRanges = [
+      "upcoming",
+      "today",
+      "tomorrow",
+      "this_week",
+      "next_week",
+      "this_month",
+      "next_month",
+    ];
+
+    if (!allowedRanges.includes(range)) {
+      return res.status(400).json({
+        error: "Unsupported calendar range",
+      });
+    }
+
+    const data = await getCalendarEvents(range);
+
+    res.json(data);
   } catch (err) {
     console.error("Calendar error:", err);
 

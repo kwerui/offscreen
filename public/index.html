@@ -235,7 +235,23 @@ Whenever the user asks about their calendar, schedule, next event, upcoming even
 
 Never invent calendar information. Base calendar answers only on the tool result.
 
-Do not claim an action succeeded until its tool reports success. </textarea>
+Do not claim an action succeeded until its tool reports success.
+
+You can read the user's real Google Calendar using the get_calendar_events tool.
+
+For calendar questions, choose the appropriate range:
+- next event / what's coming up → upcoming
+- today → today
+- tomorrow → tomorrow
+- this week → this_week
+- next week → next_week
+- this month → this_month
+- next month → next_month
+
+Always use the calendar tool when the user asks about their real schedule.
+Never invent calendar information.
+
+</textarea>
         </div>
       </div>
 
@@ -429,13 +445,28 @@ tools: [
 },
 {
   type: "function",
-  name: "get_upcoming_events",
+  name: "get_calendar_events",
   description:
-    "Get the user's upcoming Google Calendar events. Use this whenever the user asks about their calendar, schedule, next event, or upcoming commitments.",
+    "Read the user's Google Calendar for a requested time period.",
   parameters: {
     type: "object",
-    properties: {},
-    required: [],
+    properties: {
+      range: {
+        type: "string",
+        enum: [
+          "upcoming",
+          "today",
+          "tomorrow",
+          "this_week",
+          "next_week",
+          "this_month",
+          "next_month"
+        ],
+        description:
+          "The time period of calendar events the user wants to know about.",
+      },
+    },
+    required: ["range"],
   },
 }
 
@@ -584,43 +615,49 @@ async function handleToolCall(event) {
     return;
   }
 
-  if (event.name === "get_upcoming_events") {
-    try {
-      console.log("Fetching Google Calendar events...");
+ if (event.name === "get_calendar_events") {
+  try {
+    const range = event.arguments?.range || "upcoming";
 
-      const response = await fetch("/api/calendar/upcoming");
+    console.log("Fetching calendar:", range);
 
-      if (!response.ok) {
-        throw new Error(
-          `Calendar request failed with status ${response.status}`,
-        );
-      }
+    const response = await fetch(
+      `/api/calendar/events?range=${encodeURIComponent(range)}`
+    );
 
-      const data = await response.json();
-
-      console.log("Calendar events:", data.events);
-
-      pendingToolResults.push({
-        call_id: event.call_id,
-        result: {
-          success: true,
-          events: data.events,
-        },
-      });
-    } catch (err) {
-      console.error("Calendar tool failed:", err);
-
-      pendingToolResults.push({
-        call_id: event.call_id,
-        result: {
-          success: false,
-          error: err.message,
-        },
-      });
+    if (!response.ok) {
+      throw new Error(
+        `Calendar request failed with status ${response.status}`
+      );
     }
 
-    return;
+    const data = await response.json();
+
+    console.log("Calendar result:", data);
+
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: true,
+        range,
+        timezone: data.timezone,
+        events: data.events,
+      },
+    });
+  } catch (err) {
+    console.error("Calendar tool failed:", err);
+
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: false,
+        error: err.message,
+      },
+    });
   }
+
+  return;
+}
 
   pendingToolResults.push({
     call_id: event.call_id,
