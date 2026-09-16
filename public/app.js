@@ -11,8 +11,15 @@ import {
   showToolStatus,
   updateUserPartialTranscript,
 } from "./ui.js";
+import {
+  flushPlayback,
+  hasAudioResources,
+  playPCM,
+  setUpAudio,
+  startMicrophoneCapture,
+  tearDownAudio,
+} from "./audio.js";
 
-      const SAMPLE_RATE = 24_000;
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
 
@@ -25,14 +32,8 @@ import {
       };
 
       let ws = null;
-      let audioCtx = null;
-      let micStream = null;
-      let workletNode = null;
-      let micSource = null;
       let activeSessionId = 0;
 
-      let playbackTime = 0;
-      let scheduledSources = [];
       let pendingToolResults = [];
       let activeToolTasks = 0;
       let toolReplyDone = false;
@@ -112,7 +113,7 @@ import {
       async function connect() {
         const sessionId = activeSessionId + 1;
 
-        if (ws || audioCtx || micStream) {
+        if (ws || hasAudioResources()) {
           activeSessionId = sessionId;
           teardown();
         } else {
@@ -127,6 +128,8 @@ import {
         );
 
         let token;
+
+        let connectionSocket;
 
         try {
           token = await fetchToken();
@@ -146,100 +149,42 @@ import {
           return;
         }
 
-        let connectionAudioContext;
-
         try {
-          connectionAudioContext = new (
-            window.AudioContext ||
-            window.webkitAudioContext
-          )({
-            sampleRate: SAMPLE_RATE,
+          const audioWasSetUp = await setUpAudio({
+            isSessionActive: () => isActiveSession(sessionId),
+            onMicrophoneAudio: (audio) => {
+              if (
+                ws !== connectionSocket ||
+                connectionSocket.readyState !== WebSocket.OPEN
+              ) {
+                return;
+              }
+
+              connectionSocket.send(
+                JSON.stringify({
+                  type: "input.audio",
+                  audio,
+                })
+              );
+            },
           });
-        } catch (err) {
-          console.error("Audio context error:", err);
-          endActiveSession("error", "Audio setup error");
-          return;
-        }
 
-        if (!isActiveSession(sessionId)) {
-          closeAudioContext(connectionAudioContext);
-          return;
-        }
-
-        audioCtx = connectionAudioContext;
-
-        playbackTime =
-          connectionAudioContext.currentTime;
-
-        scheduledSources = [];
-
-        try {
-          const capturedMicrophoneStream =
-            await navigator.mediaDevices.getUserMedia({
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 1,
-              },
-            });
-
-          if (!isActiveSession(sessionId)) {
-            stopMicrophoneTracks(capturedMicrophoneStream);
+          if (!audioWasSetUp) {
             return;
           }
-
-          micStream = capturedMicrophoneStream;
         } catch (err) {
           if (!isActiveSession(sessionId)) {
             return;
           }
 
-          console.error(
-            "Mic permission denied:",
-            err
-          );
-
-          endActiveSession(
-            "error",
-            "Mic blocked"
-          );
-
-          return;
-        }
-
-        try {
-          await connectionAudioContext.audioWorklet.addModule(
-            "pcm-processor.js"
-          );
-        } catch (err) {
-          if (!isActiveSession(sessionId)) {
-            return;
+          if (err.stage === "microphone") {
+            console.error("Mic permission denied:", err.cause);
+            endActiveSession("error", "Mic blocked");
+          } else {
+            console.error("Audio setup error:", err.cause);
+            endActiveSession("error", "Audio setup error");
           }
 
-          console.error("AudioWorklet load error:", err);
-          endActiveSession("error", "Audio setup error");
-          return;
-        }
-
-        if (!isActiveSession(sessionId)) {
-          return;
-        }
-
-        try {
-          micSource =
-            connectionAudioContext.createMediaStreamSource(
-              micStream
-            );
-
-          workletNode =
-            new AudioWorkletNode(
-              connectionAudioContext,
-              "pcm-processor"
-            );
-        } catch (err) {
-          console.error("Audio node setup error:", err);
-          endActiveSession("error", "Audio setup error");
           return;
         }
 
@@ -247,8 +192,6 @@ import {
           "connecting",
           "Connecting…"
         );
-
-        let connectionSocket;
 
         try {
           connectionSocket = new WebSocket(
@@ -457,30 +400,6 @@ description:
           endActiveSession();
         };
 
-        workletNode.port.onmessage = (
-          event
-        ) => {
-          if (
-            !isActiveSession(sessionId) ||
-            ws !== connectionSocket ||
-            connectionSocket.readyState !==
-              WebSocket.OPEN
-          ) {
-            return;
-          }
-
-          const audio =
-            arrayBufferToBase64(
-              event.data
-            );
-
-          connectionSocket.send(
-            JSON.stringify({
-              type: "input.audio",
-              audio,
-            })
-          );
-        };
       }
 
       function handleEvent(event, sessionId) {
@@ -509,9 +428,7 @@ description:
 
             setDisconnectButtonDisabled(false);
 
-            micSource.connect(
-              workletNode
-            );
+            startMicrophoneCapture();
 
             break;
 
@@ -546,7 +463,7 @@ description:
           case "reply.audio":
             playPCM(
               event.data,
-              sessionId
+              () => isActiveSession(sessionId)
             );
             break;
 
@@ -900,130 +817,16 @@ addToolResult(sessionId, toolTurnId, event.call_id, {
         return true;
       }
 
-      function playPCM(b64, sessionId) {
-        const bytes =
-          Uint8Array.from(
-            atob(b64),
-            (char) =>
-              char.charCodeAt(0)
-          );
-
-        const int16 =
-          new Int16Array(
-            bytes.buffer,
-            bytes.byteOffset,
-            bytes.byteLength / 2
-          );
-
-        const float32 =
-          new Float32Array(
-            int16.length
-          );
-
-        for (
-          let i = 0;
-          i < int16.length;
-          i++
-        ) {
-          float32[i] =
-            int16[i] /
-            0x8000;
-        }
-
-        const buffer =
-          audioCtx.createBuffer(
-            1,
-            float32.length,
-            SAMPLE_RATE
-          );
-
-        buffer
-          .getChannelData(0)
-          .set(float32);
-
-        const source =
-          audioCtx.createBufferSource();
-
-        source.buffer =
-          buffer;
-
-        source.connect(
-          audioCtx.destination
-        );
-
-        const now =
-          audioCtx.currentTime;
-
-        if (
-          playbackTime < now
-        ) {
-          playbackTime = now;
-        }
-
-        source.start(
-          playbackTime
-        );
-
-        playbackTime +=
-          buffer.duration;
-
-        scheduledSources.push(
-          source
-        );
-
-        source.onended = () => {
-          if (!isActiveSession(sessionId)) {
-            return;
-          }
-
-          scheduledSources =
-            scheduledSources.filter(
-              (item) =>
-                item !== source
-            );
-        };
-      }
-
-      function flushPlayback() {
-        for (
-          const source of
-          scheduledSources
-        ) {
-          try {
-            source.stop();
-          } catch (_) {}
-        }
-
-        scheduledSources = [];
-
-        if (audioCtx) {
-          playbackTime =
-            audioCtx.currentTime;
-        }
-      }
-
       function teardown(statusState = "", statusText = "Disconnected") {
         const socket = ws;
-        const audioContext = audioCtx;
-        const microphoneStream = micStream;
-        const processor = workletNode;
-        const microphoneSource = micSource;
 
         invalidateToolTurn();
         unresolvedCodexCalls.clear();
-        flushPlayback();
 
         ws = null;
-        audioCtx = null;
-        micStream = null;
-        workletNode = null;
-        micSource = null;
 
         closeWebSocket(socket);
-        disconnectAudioNode(processor);
-        disconnectAudioNode(microphoneSource);
-        stopMicrophoneTracks(microphoneStream);
-        closeAudioContext(audioContext);
+        tearDownAudio();
         resetUserPartialTranscript();
         setStatus(statusState, statusText);
         setConnectButtonDisabled(false);
@@ -1048,73 +851,6 @@ addToolResult(sessionId, toolTurnId, event.call_id, {
         } catch (err) {
           console.error("WebSocket close error:", err);
         }
-      }
-
-      function disconnectAudioNode(audioNode) {
-        if (!audioNode) {
-          return;
-        }
-
-        try {
-          audioNode.disconnect();
-        } catch (err) {
-          console.error("Audio node disconnect error:", err);
-        }
-      }
-
-      function stopMicrophoneTracks(stream) {
-        if (!stream) {
-          return;
-        }
-
-        for (const track of stream.getTracks()) {
-          try {
-            track.stop();
-          } catch (err) {
-            console.error("Microphone track stop error:", err);
-          }
-        }
-      }
-
-      function closeAudioContext(audioContext) {
-        if (!audioContext || audioContext.state === "closed") {
-          return;
-        }
-
-        audioContext.close().catch((err) => {
-          console.error("Audio context close error:", err);
-        });
-      }
-
-      function arrayBufferToBase64(
-        buffer
-      ) {
-        const bytes =
-          new Uint8Array(
-            buffer
-          );
-
-        let binary = "";
-
-        const chunk =
-          0x8000;
-
-        for (
-          let i = 0;
-          i < bytes.length;
-          i += chunk
-        ) {
-          binary +=
-            String.fromCharCode.apply(
-              null,
-              bytes.subarray(
-                i,
-                i + chunk
-              )
-            );
-        }
-
-        return btoa(binary);
       }
 
       bindControls(connect, disconnect);

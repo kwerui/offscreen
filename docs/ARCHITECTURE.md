@@ -235,7 +235,7 @@ public/
   styles.css                      existing page styles
   app.js                          existing browser orchestration entry point
   voice-session.js                proposed AssemblyAI session lifecycle
-  audio.js                        proposed microphone and playback logic
+  audio.js                        existing microphone and playback logic
   tools.js                        proposed tool definitions and execution
   ui.js                             existing transcript / status rendering
   pcm-processor.js                existing AudioWorklet
@@ -257,7 +257,7 @@ tests and manual verification protect the current behavior.
 | `codex-runner.js` | Start, time-limit, and normalize the read-only Codex process. |
 | `app.js` | Coordinate UI actions and one active voice session. |
 | `voice-session.js` | Own WebSocket messages, session generation, turn coordination, and stale-event protection. |
-| `audio.js` | Capture, convert/send, schedule, stop, and clean up audio. |
+| `audio.js` | Capture microphone audio, encode PCM for delivery, schedule playback, stop, and clean up audio. |
 | `tools.js` | Define supported tools and return a normalized tool result. |
 | `ui.js` | Update status and transcript DOM elements. |
 | `styles.css` | Hold the page styles. |

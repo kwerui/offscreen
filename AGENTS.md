@@ -60,9 +60,14 @@ Current structure:
 - `public/ui.js`
   - DOM lookup and UI rendering
 
+- `public/audio.js`
+  - microphone capture
+  - AudioWorklet setup
+  - PCM encoding/playback
+  - audio cleanup
+
 - `public/app.js`
   - AssemblyAI WebSocket session
-  - microphone/audio handling
   - browser-side tool execution
   - session and turn coordination
 

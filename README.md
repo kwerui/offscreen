@@ -48,10 +48,11 @@ search tools, is listed in [ROADMAP.md](ROADMAP.md). None of those planned
 features are implemented unless they appear under **Current features** above.
 
 `public/index.html` contains the page markup, `public/styles.css` contains the
-page styles, and `public/ui.js` contains DOM lookup and UI rendering. The
-`public/app.js` entry point contains audio handling, AssemblyAI/session
-coordination, and browser tool handlers. The frontend will continue to be
-separated incrementally while preserving the working voice flow.
+page styles, and `public/ui.js` contains DOM lookup and UI rendering.
+`public/audio.js` owns microphone capture and PCM playback. The
+`public/app.js` entry point coordinates AssemblyAI sessions and browser tool
+handlers. The frontend will continue to be separated incrementally while
+preserving the working voice flow.
 
 ## Tech stack
 
