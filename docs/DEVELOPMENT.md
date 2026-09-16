@@ -1,0 +1,273 @@
+# Developing Offscreen
+
+This guide explains how to run and maintain the current Offscreen prototype.
+It describes what exists today. Proposed module names in the architecture
+document do not exist yet.
+
+## Prerequisites
+
+- Node.js 18 or newer (the project declares this minimum version).
+- npm.
+- An AssemblyAI account and API key for Voice Agent access.
+- A Google Cloud project with Google Calendar API access for Calendar queries.
+- Local Google OAuth client credentials for the Calendar integration.
+- The Codex CLI installed and available on your `PATH` if you want to use the
+  voice-driven Codex tool.
+- A modern browser with microphone permission available.
+
+## Installation
+
+From the repository root:
+
+```bash
+npm install
+```
+
+This installs the dependencies already declared by the project. Do not add a
+package merely to follow this guide.
+
+## Environment setup
+
+1. Copy the example environment file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Set `ASSEMBLYAI_API_KEY` in `.env` to your own AssemblyAI key.
+3. Do not paste the key into source code, browser developer tools, screenshots,
+   chat messages, or commits.
+4. Keep Google OAuth client credentials in a local `credentials.json` at the
+   repository root. The current Calendar code looks for that exact local file.
+
+`.env`, `credentials.json`, and `token.json` must remain untracked. Check with
+`git status` before committing.
+
+## Google Calendar OAuth setup (high level)
+
+1. Create or select a Google Cloud project you control.
+2. Enable the Google Calendar API for that project.
+3. Create OAuth client credentials suitable for a local desktop application.
+4. Download the credential file and save it locally as `credentials.json` in
+   the repository root.
+5. Start Offscreen and make a Calendar request. The local OAuth flow should
+   open a browser for Google authorization.
+6. Grant only the requested read-only Calendar permission.
+
+Do not commit the credential file. Do not change OAuth scopes or add write
+access casually; those are security-sensitive product changes.
+
+## Start Offscreen
+
+Run:
+
+```bash
+npm start
+```
+
+The current start command runs `node server.js`. By default the server reports
+a local URL such as `http://localhost:3000`. Open that URL in a browser, choose
+a voice/prompt if desired, then select **Connect** and grant microphone access.
+
+## Tests
+
+There is currently **no working automated test command**. `npm test` will fail
+because `package.json` does not define a test script, and `calendar-test.js` is
+an obsolete helper that imports a missing export.
+
+After the engineering-foundation roadmap phase adds a test command, run the
+documented command—expected to be `npm test`—before committing behavior
+changes. Until then, use focused syntax checks and manual integration checks;
+do not claim automated coverage that does not exist.
+
+## Current application flow
+
+1. The browser requests a temporary AssemblyAI token from the local server.
+2. The server uses its secret AssemblyAI API key to mint the temporary token.
+3. The browser opens an AssemblyAI Voice Agent WebSocket using that token.
+4. Once the session is ready, the browser sends the selected voice, greeting,
+   system prompt, and tool definitions.
+5. The browser captures microphone audio, converts it to PCM through
+   `pcm-processor.js`, base64-encodes the frames, and sends them to AssemblyAI.
+6. AssemblyAI sends user transcripts, agent reply audio, agent transcripts,
+   and sometimes tool calls.
+7. The browser displays transcripts and schedules agent PCM audio for playback.
+
+## How a voice request travels through the system
+
+For a regular question, speech travels from microphone to browser to AssemblyAI
+and a spoken reply travels back the same way in reverse.
+
+For an action, AssemblyAI sends a `tool.call` event. The browser selects the
+matching implementation:
+
+- `open_website` opens one of the allowlisted URLs in a new browser tab.
+- `get_calendar_events` calls the local Calendar query route, which calls
+  Google Calendar with server-side OAuth.
+- `ask_codex` calls the local Codex route, which starts the local read-only
+  Codex CLI.
+
+The browser packages the outcome as a `tool.result` message for AssemblyAI.
+AssemblyAI then uses that result to speak its answer.
+
+## How AssemblyAI tools work
+
+The current browser sends tool definitions as part of its WebSocket
+`session.update` message. A definition gives AssemblyAI a tool name,
+description, parameter shape, and timeout. When the model decides a tool is
+needed, it sends the browser a `tool.call` event with a call ID and arguments.
+
+The browser must return a result using the same call ID. A successful result
+and a failed result should both be explicit; never pretend an external action
+succeeded when it did not.
+
+## Adding a browser-side tool
+
+The current implementation keeps tool definitions and execution in
+`public/index.html`. Until the proposed frontend split exists, make a small,
+careful change in that file:
+
+1. Decide whether the action is truly browser-only. Opening an allowlisted site
+   is browser-only; accessing credentials or an external private API is not.
+2. Add a precise tool definition to the `session.update` tools list: name,
+   description, parameters, required fields, and timeout.
+3. Add a matching branch in `handleToolCall`.
+4. Validate tool arguments before acting.
+5. Push an explicit success or failure object with the incoming `call_id`.
+6. Update the system prompt only when the agent needs routing instructions.
+7. Manually verify success, unsupported/invalid input, and a tool failure.
+
+Keep the browser allowlist explicit. Do not turn a spoken site name into an
+arbitrary URL without a deliberate security design.
+
+## Adding a backend integration
+
+Use the backend when an action needs secrets, OAuth, server-side validation, or
+an external private API.
+
+1. Write down the user value and the required permission/scope first.
+2. Keep credentials in the server environment or local ignored files.
+3. Add focused integration logic rather than mixing unrelated service code into
+   an existing function.
+4. Add a small validated HTTP route in `server.js` under the **current**
+   architecture. Future route modules are proposed only.
+5. Add or extend the browser tool so it calls that route and returns a safe
+   normalized tool result.
+6. Test input validation, successful behavior, external failure behavior, and
+   the full voice tool flow.
+
+Before adding Calendar write access, Gmail access, new OAuth scopes, or another
+security-sensitive integration, stop and get explicit approval.
+
+## Debugging guide
+
+### Transcription problems
+
+- Confirm microphone permission is granted in the browser.
+- Confirm the status reaches **Connected** before speaking.
+- Open browser developer tools and inspect console messages for WebSocket or
+  microphone errors.
+- Verify `pcm-processor.js` loads successfully and that microphone frames are
+  being sent only while the WebSocket is open.
+- Check that the browser and agent both use the expected 24 kHz PCM format.
+
+### Missing `tool.call`
+
+- Read the system prompt currently selected in the UI; it tells the agent when
+  Calendar and Codex tools are mandatory.
+- Check that the tool definitions were included in `session.update`.
+- Look for the logged session-ready/session-updated tool configuration in the
+  browser console.
+- Try a direct, unambiguous request such as “What do I have today?” or “Ask
+  Codex which file handles Calendar?”
+
+### Failed backend requests
+
+- Use the browser Network panel to inspect the local `/api/...` request status
+  and response body.
+- Check the server terminal for `Calendar error`, `Calendar query error`, or
+  `Codex process error` messages.
+- For Calendar, verify local `credentials.json`, OAuth authorization, API
+  enablement, and read-only Calendar access.
+- For Codex, verify the `codex` command is installed and available to the
+  server process.
+
+### Failed tool results
+
+- Look for `TOOL CALLED`, Calendar, Codex, and `Sending tool results` messages
+  in the browser console.
+- Confirm the tool handler places a result with the original `call_id` into the
+  pending result queue.
+- Check whether the voice reply was interrupted; the current implementation
+  clears pending results when an interrupted reply is reported.
+- Reconnect and retry if a request was started while disconnecting. The
+  reliability roadmap addresses stale-session behavior more fully.
+
+### WebSocket problems
+
+- First check that `/api/voice-token` succeeds; token failure prevents the
+  WebSocket from opening.
+- Check browser console logs for `WebSocket error`, `WebSocket closed`, and
+  `session.error` messages.
+- Confirm the temporary token, network connection, and AssemblyAI service are
+  available.
+- Disconnect before attempting another connection. The current lifecycle has
+  known edge cases around disconnecting while a connection is still opening.
+
+### Slow Codex requests
+
+- The current voice tool timeout is shorter than the server-side Codex process
+  timeout. A slow request can therefore outlive the voice tool's wait period.
+- Keep requested Codex tasks focused and ask it to inspect only the files
+  needed for the answer.
+- Check the server terminal for `CODEX TASK`, process errors, and exit code.
+- Do not treat a late response as proof the voice tool completed successfully.
+  Timeout alignment is planned in the reliability phase.
+
+## Useful checkpoints
+
+Browser console checkpoints currently include:
+
+- AssemblyAI events other than reply-audio frames;
+- session-ready and session-updated tool configuration;
+- WebSocket errors and close codes;
+- tool invocation and Calendar/Codex result logs;
+- pending tool-result sends.
+
+Server terminal checkpoints currently include:
+
+- missing AssemblyAI configuration at startup;
+- AssemblyAI token-mint failures;
+- Calendar route failures;
+- Codex process start/exit failures.
+
+Treat console logs as development diagnostics. Never add logs that print API
+keys, OAuth credentials, bearer tokens, or other secret values.
+
+## Files that must never be committed
+
+- `.env`
+- `credentials.json`
+- `token.json`
+- private key files such as `.pem` or `.key`
+- exported credentials, downloaded secrets, or copied API tokens
+- `node_modules/`
+
+Before every commit, run `git status` and inspect the staged diff.
+
+## Normal development workflow
+
+1. **Inspect.** Read the relevant files and check `git status`.
+2. **Plan.** State the small behavior change and the behavior that must remain
+   unchanged.
+3. **Change one logical thing.** Avoid combining a refactor, feature, and
+   dependency update.
+4. **Test.** Run relevant automated tests when they exist; manually verify
+   integrations that touch microphone, AssemblyAI, Calendar, or Codex.
+5. **Review the diff.** Check for accidental source changes, secrets, dead
+   code, and unclear names.
+6. **Commit.** Use a focused, descriptive commit message after verification.
+
+If a change would alter OAuth scopes, add external write access, migrate the
+framework, or substantially redesign the voice architecture, stop and obtain
+explicit approval first.
