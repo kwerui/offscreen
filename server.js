@@ -10,11 +10,11 @@ import {
   getCalendarEvents,
   getCalendarEventsForDate,
 } from "./calendar.js";
+import { parseCalendarQuery } from "./calendar-query.js";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import "dotenv/config";
-import * as chrono from "chrono-node";
 import { spawn } from "node:child_process";
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
@@ -88,48 +88,6 @@ app.get("/api/calendar/events", async (req, res) => {
   }
 });
 
-function getNextDateForDayOfMonth(
-  dayOfMonth,
-  referenceDate = new Date()
-) {
-  if (
-    !Number.isInteger(dayOfMonth) ||
-    dayOfMonth < 1 ||
-    dayOfMonth > 31
-  ) {
-    return null;
-  }
-
-  const today = new Date(
-    referenceDate.getFullYear(),
-    referenceDate.getMonth(),
-    referenceDate.getDate()
-  );
-
-  for (
-    let monthOffset = 0;
-    monthOffset < 12;
-    monthOffset++
-  ) {
-    const candidate = new Date(
-      today.getFullYear(),
-      today.getMonth() + monthOffset,
-      dayOfMonth
-    );
-
-    // Skip impossible dates such as February 31.
-    if (candidate.getDate() !== dayOfMonth) {
-      continue;
-    }
-
-    if (candidate >= today) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
 app.get("/api/calendar/query", async (req, res) => {
   try {
     const when = String(req.query.when || "").trim();
@@ -140,61 +98,21 @@ app.get("/api/calendar/query", async (req, res) => {
       });
     }
 
-    const rangeMap = {
-      upcoming: "upcoming",
-      today: "today",
-      tomorrow: "tomorrow",
-      "this week": "this_week",
-      "next week": "next_week",
-      "this month": "this_month",
-      "next month": "next_month",
-    };
+    const calendarQuery = parseCalendarQuery(when);
 
-    const normalized = when.toLowerCase();
-
-    if (rangeMap[normalized]) {
-      const data = await getCalendarEvents(
-        rangeMap[normalized]
-      );
-
-      return res.json(data);
-    }
-
-    const bareDayMatch = normalized.match(
-  /^(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?$/
-);
-
-let parsedDate;
-
-if (bareDayMatch) {
-  const dayOfMonth = Number(bareDayMatch[1]);
-
-  parsedDate =
-    getNextDateForDayOfMonth(dayOfMonth);
-} else {
-  parsedDate = chrono.parseDate(
-    when,
-    new Date(),
-    {
-      forwardDate: true,
-    }
-  );
-}
-
-    if (!parsedDate) {
+    if (!calendarQuery) {
       return res.status(400).json({
         error: `Could not understand date: ${when}`,
       });
     }
 
-    const date = [
-      parsedDate.getFullYear(),
-      String(parsedDate.getMonth() + 1).padStart(2, "0"),
-      String(parsedDate.getDate()).padStart(2, "0"),
-    ].join("-");
+    if (calendarQuery.type === "range") {
+      const data = await getCalendarEvents(calendarQuery.range);
 
-    const data =
-      await getCalendarEventsForDate(date);
+      return res.json(data);
+    }
+
+    const data = await getCalendarEventsForDate(calendarQuery.date);
 
     res.json(data);
   } catch (err) {

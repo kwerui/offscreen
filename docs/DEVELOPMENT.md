@@ -71,14 +71,19 @@ a voice/prompt if desired, then select **Connect** and grant microphone access.
 
 ## Tests
 
-There is currently **no working automated test command**. `npm test` will fail
-because `package.json` does not define a test script, and `calendar-test.js` is
-an obsolete helper that imports a missing export.
+Run the automated test suite with:
 
-After the engineering-foundation roadmap phase adds a test command, run the
-documented command—expected to be `npm test`—before committing behavior
-changes. Until then, use focused syntax checks and manual integration checks;
-do not claim automated coverage that does not exist.
+```bash
+npm test
+```
+
+The project uses Node's built-in test runner; no test framework dependency was
+added. The current suite is in `test/calendar-query.test.js` and covers
+deterministic Calendar-query behavior only. It does not contact AssemblyAI,
+Google Calendar, a microphone, or Codex.
+
+Continue to manually verify integrations when a change affects microphone,
+AssemblyAI, Google Calendar, or Codex behavior.
 
 ## Current application flow
 

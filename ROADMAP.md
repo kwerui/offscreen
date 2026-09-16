@@ -43,9 +43,9 @@ ask Codex, and disconnect.
    architecture, conventions, development setup, and this roadmap.
 2. Establish a lightweight automated test baseline using the platform's
    built-in capabilities; do not add a test dependency merely for convenience.
-3. Replace the obsolete `calendar-test.js` helper only after equivalent,
-   meaningful tests exist. It currently imports a function that is not
-   exported, so it is not a usable test baseline.
+3. Keep the test baseline focused on deterministic behavior. The obsolete
+   `calendar-test.js` helper has been replaced by
+   `test/calendar-query.test.js`, which protects the current query parser.
 4. Define release/archive hygiene: `offscreen.zip` is a release artifact, not
    an independent source of truth. Generate it from the exact release commit
    and compare its contents before submission.
@@ -81,8 +81,8 @@ where practical.
 
 **Priority: BEFORE SUBMISSION. Depends on Phase 1.**
 
-- Extract deterministic calendar-query parsing from the Express route into a
-  proposed pure module such as `calendar-query.js`.
+- Extend the existing deterministic `calendar-query.js` tests as Calendar
+  behavior changes; do not move parsing back into an Express route.
 - Make browser, server parsing, and Google Calendar timezone handling
   consistent for dates such as “Friday” and “the 28th.”
 - Remove duplicated Google Calendar client, timezone, and event-formatting

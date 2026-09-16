@@ -19,7 +19,8 @@ proposed file or module already exists.
 ```text
 server.js                 Express server and backend API routes
 calendar.js               Google Calendar authentication and queries
-calendar-test.js          Obsolete manual helper; currently broken
+calendar-query.js         Deterministic Calendar query interpretation
+test/calendar-query.test.js  Node tests for Calendar query interpretation
 public/
   index.html              Browser UI and nearly all browser application logic
   pcm-processor.js        AudioWorklet for microphone PCM conversion
@@ -37,7 +38,8 @@ from the server environment. It currently owns several different concerns:
 
 - `GET /api/voice-token` mints a short-lived AssemblyAI token for the browser;
 - Calendar HTTP routes validate requests and call `calendar.js`;
-- the Calendar query route also interprets natural-language date input;
+- the Calendar query route validates input, calls `calendar-query.js`, and
+  chooses the appropriate Calendar query;
 - `POST /api/codex` starts a local read-only Codex CLI process;
 - static-file serving and server startup.
 
@@ -77,11 +79,18 @@ This focused AudioWorklet receives microphone samples as floating-point values,
 converts them to 16-bit signed PCM, and sends each frame to the main browser
 thread. It has one clear job and does not need a structural change now.
 
-### `calendar-test.js`
+### `calendar-query.js`
 
-This is not a current automated test. It imports `getUpcomingEvents`, which is
-not exported by `calendar.js`. It should not be treated as proof that Calendar
-behavior works.
+`calendar-query.js` contains the deterministic portion of Calendar query
+interpretation: named ranges, bare day-of-month handling, natural-language date
+parsing, and date formatting. It does not make HTTP or Google API requests, so
+it can be tested without credentials or network access.
+
+### `test/calendar-query.test.js`
+
+This Node built-in test suite protects the current Calendar query behavior,
+including supported ranges, natural-language dates, bare ordinal dates, and
+important month-boundary cases.
 
 ### `offscreen.zip`
 
@@ -134,10 +143,11 @@ The current implementation tracks this with shared counters and arrays in
 ### Google Calendar flow
 
 The `get_calendar_events` browser tool sends the requested natural-language
-time to `GET /api/calendar/query`. `server.js` recognizes named ranges such as
-`today`, otherwise parses a date, and calls `calendar.js`. `calendar.js` asks
-Google for events in the primary Calendar timezone and returns a simplified
-event list. The browser returns that data to AssemblyAI as a tool result.
+time to `GET /api/calendar/query`. `server.js` passes the query to
+`calendar-query.js`, which recognizes named ranges such as `today` or returns
+a parsed date. `calendar.js` asks Google for events in the primary Calendar
+timezone and returns a simplified event list. The browser returns that data to
+AssemblyAI as a tool result.
 
 ### Codex flow
 
@@ -180,12 +190,12 @@ These are audit findings, not evidence that every path currently fails.
   Calendar time, which can be wrong near timezone boundaries.
 - `calendar.js` duplicates Calendar client/timezone/event-formatting work in
   its two exported functions.
-- Calendar parsing is mixed into an Express route, so deterministic behavior is
-  not isolated for simple tests.
+- Calendar parsing is isolated and covered by Node tests, but Calendar
+  timezone handling remains a later concern.
 - Multiple Calendar endpoints exist, but only the query endpoint has a
   current in-repository browser caller.
-- No working automated test command exists yet, and `calendar-test.js` is
-  obsolete.
+- The initial automated suite covers only deterministic Calendar-query logic;
+  integration behavior still needs manual verification.
 - `offscreen.zip` is stale and must not be trusted as a release artifact.
 
 ## Proposed target architecture
@@ -199,7 +209,7 @@ server.js                         application assembly and static hosting
   routes/voice.js                 proposed token endpoint
   routes/calendar.js              proposed Calendar HTTP validation
   routes/codex.js                 proposed Codex HTTP validation
-  calendar-query.js               proposed pure calendar parser
+  calendar-query.js               existing pure calendar parser
   calendar.js                     Google OAuth and event fetching
   codex-runner.js                 proposed bounded Codex process runner
 
@@ -224,7 +234,7 @@ tests and manual verification protect the current behavior.
 | `routes/voice.js` | Validate and serve temporary Voice Agent token requests. |
 | `routes/calendar.js` | Validate Calendar HTTP input and translate service outcomes to HTTP responses. |
 | `routes/codex.js` | Validate Codex task requests and return safe, bounded results. |
-| `calendar-query.js` | Parse a supported range or natural-language date without HTTP or Google access. |
+| `calendar-query.js` | Existing module: parse a supported range or natural-language date without HTTP or Google access. |
 | `calendar.js` | Authenticate with Google, obtain Calendar context, fetch, and format events. |
 | `codex-runner.js` | Start, time-limit, and normalize the read-only Codex process. |
 | `app.js` | Coordinate UI actions and one active voice session. |
