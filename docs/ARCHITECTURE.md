@@ -195,9 +195,12 @@ The `ask_codex` browser tool is identified and coordinated by `app.js`.
 `codex-tool.js` sends its task to `POST /api/codex` and returns the existing
 tool-result shape. `app.js` retains interactive call tracking,
 supersession/cancellation, session/turn checks, and generic result
-coordination. The server starts `codex exec` with a read-only sandbox and
-returns its stdout as the tool result. This is intended for a trusted, local
-development/demo environment.
+coordination. The server copies its own project directory into a temporary
+filtered inspection workspace, starts `codex exec` there in read-only and
+ephemeral modes with a restricted child environment, then returns its stdout
+as the tool result. The copy reduces exposure of repository-local secret files;
+it is not host-level filesystem isolation. This is intended for a trusted,
+local development/demo environment.
 
 ## Current frontend/backend boundary
 

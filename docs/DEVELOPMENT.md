@@ -43,6 +43,22 @@ package merely to follow this guide.
 `.env`, `credentials.json`, and `token.json` must remain untracked. Check with
 `git status` before committing.
 
+For local Codex inspection, untracked status is not a security boundary.
+Offscreen gives the Codex child a small runtime environment allowlist, so
+application secrets loaded by the server are not inherited. It also creates a
+temporary filtered copy of the project directory containing normal source
+files. The copy excludes `.env` files, `credentials.json`, `token.json`, common
+private-key files, symlinks, `.git`, `node_modules`, and archives.
+
+These controls have different limits. The filtered copy reduces accidental
+exposure of repository-local secret files, but Codex read-only mode prevents
+writes; it is not a guarantee that Codex can read only its working directory or
+that it cannot read other host files available to the process. Codex needs its
+own authentication location: on this platform that normally comes from `HOME`
+or a configured `CODEX_HOME`. Prefer the OS keyring for Codex authentication
+when available. Do not copy Codex authentication files into the inspection
+workspace or place application secrets in Codex-related environment variables.
+
 ## Google Calendar OAuth setup (high level)
 
 1. Create or select a Google Cloud project you control.

@@ -17,6 +17,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import "dotenv/config";
 import { spawn } from "node:child_process";
+import {
+  createCodexEnvironment,
+  createCodexInspectionWorkspace,
+  removeCodexInspectionWorkspace,
+} from "./codex-runner.js";
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -189,6 +194,15 @@ app.post("/api/codex", async (req, res) => {
     "Inspect only the minimum files needed to answer the question. " +
     "Stop as soon as you have enough information to answer.";
 
+  let inspectionWorkspace;
+
+  try {
+    inspectionWorkspace = await createCodexInspectionWorkspace(__dirname);
+  } catch (error) {
+    console.error("Could not prepare Codex inspection workspace:", error.message);
+    return res.status(500).json({ error: "Failed to prepare Codex" });
+  }
+
   const child = spawn(
     "codex",
     [
@@ -196,14 +210,15 @@ app.post("/api/codex", async (req, res) => {
       "--ephemeral",
       "--sandbox",
       "read-only",
+      "--skip-git-repo-check",
       "-c",
       'model_reasoning_effort="low"',
       codexTask,
     ],
 
     {
-      cwd: process.cwd(),
-      env: process.env,
+      cwd: inspectionWorkspace,
+      env: createCodexEnvironment(),
     }
   );
 
@@ -216,6 +231,20 @@ app.post("/api/codex", async (req, res) => {
   let stderrWasTruncated = false;
   let hasResponded = false;
   let timeoutId = null;
+  let workspaceWasRemoved = false;
+
+  async function removeInspectionWorkspaceOnce() {
+    if (workspaceWasRemoved) {
+      return;
+    }
+    workspaceWasRemoved = true;
+
+    try {
+      await removeCodexInspectionWorkspace(inspectionWorkspace);
+    } catch (error) {
+      console.error("Could not remove Codex inspection workspace:", error.message);
+    }
+  }
 
   function sendResponseOnce(status, responseBody) {
     if (hasResponded) {
@@ -300,9 +329,12 @@ app.post("/api/codex", async (req, res) => {
   child.on("error", (err) => {
     console.error("Codex process error:", err.message);
     sendResponseOnce(500, { error: "Failed to start Codex" });
+    removeInspectionWorkspaceOnce();
   });
 
-  child.on("close", (code) => {
+  child.on("close", async (code) => {
+    await removeInspectionWorkspaceOnce();
+
     if (hasResponded) {
       return;
     }
