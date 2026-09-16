@@ -216,8 +216,9 @@ security-sensitive integration, stop and get explicit approval.
   `session.error` messages.
 - Confirm the temporary token, network connection, and AssemblyAI service are
   available.
-- Disconnect before attempting another connection. The current lifecycle has
-  known edge cases around disconnecting while a connection is still opening.
+- Disconnect before attempting another connection. The current lifecycle
+  invalidates the old session and closes connecting or open sockets before a
+  new connection becomes active.
 
 ### Slow Codex requests
 

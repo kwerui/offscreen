@@ -180,8 +180,9 @@ These are audit findings, not evidence that every path currently fails.
 
 - `index.html` combines many unrelated jobs, making future changes difficult to
   understand and test.
-- Connection cleanup does not safely cover every timing state; for example, a
-  connecting WebSocket can outlive a disconnect.
+- Each voice connection has a monotonically increasing session ID. Disconnect
+  invalidates that ID before closing the socket and releasing microphone/audio
+  resources, so callbacks from an older connection are ignored.
 - Tool results use shared asynchronous state, so a late completion can affect a
   newer voice session after reconnecting.
 - The Codex tool declares a shorter voice timeout than the server process
