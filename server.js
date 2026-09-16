@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import "dotenv/config";
 import * as chrono from "chrono-node";
+import { spawn } from "node:child_process";
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -27,6 +28,8 @@ const TOKEN_TTL_SECONDS = 300; // 1-600
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+app.use(express.json());
 
 app.use(express.static(join(__dirname, "public")));
 
@@ -168,6 +171,81 @@ app.get("/api/calendar/date", async (req, res) => {
       error: "Failed to fetch calendar events",
     });
   }
+});
+
+app.post("/api/codex", async (req, res) => {
+  const task = String(req.body?.task || "").trim();
+
+  if (!task) {
+    return res.status(400).json({
+      error: "Codex task is required",
+    });
+  }
+
+  console.log("CODEX TASK:", task);
+
+  const child = spawn(
+    "codex",
+    [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      task,
+    ],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+    }
+  );
+
+  child.stdin.end();
+
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.on("data", (data) => {
+    stdout += data.toString();
+  });
+
+  child.stderr.on("data", (data) => {
+    stderr += data.toString();
+  });
+
+  const timeout = setTimeout(() => {
+    child.kill("SIGTERM");
+  }, 120_000);
+
+  child.on("error", (err) => {
+    clearTimeout(timeout);
+
+    console.error("Codex process error:", err);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: "Failed to start Codex",
+      });
+    }
+  });
+
+  child.on("close", (code) => {
+    clearTimeout(timeout);
+
+    console.log("CODEX EXIT:", code);
+
+    if (code !== 0) {
+      return res.status(500).json({
+        error:
+          stderr.trim() ||
+          `Codex exited with code ${code}`,
+      });
+    }
+
+    res.json({
+      success: true,
+      output: stdout.trim(),
+    });
+  });
 });
 
 app.listen(PORT, () => {

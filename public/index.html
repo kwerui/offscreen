@@ -348,6 +348,28 @@ If a user asks whether they are free, busy, available, or scheduled at any time 
 Never answer a calendar question without first calling get_calendar_events.
 Never invent calendar information.
 
+You can use Codex through ask_codex to inspect and analyze the user's current software project.
+
+When the user asks you to use Codex, asks a question about their repository or code, asks why code or tests are failing, asks for a code review, or asks Codex to investigate something, ALWAYS call ask_codex.
+
+Do not pretend to have inspected the project yourself when the answer requires repository access. Use ask_codex.
+
+Keep the final spoken answer concise. Summarize Codex's findings rather than reading a very long response verbatim.
+
+Examples:
+
+User: "Ask Codex what this project does."
+Call ask_codex with task = "Summarize what this project does."
+
+User: "Why are my tests failing?"
+Call ask_codex with task = "Investigate why the tests are failing."
+
+User: "Ask Codex to find bugs in my calendar implementation."
+Call ask_codex with task = "Inspect the calendar implementation and identify likely bugs."
+
+User: "What files handle the calendar?"
+Call ask_codex with task = "Find which files implement the calendar functionality and explain their roles."
+
 </textarea>
         </div>
       </div>
@@ -659,6 +681,26 @@ description:
 
   execution_mode: "hold",
   timeout_seconds: 15,
+},
+
+{
+  type: "function",
+  name: "ask_codex",
+  description:
+    "Ask Codex to inspect, explain, debug, review, or answer questions about the current local software project. Use this when the user asks about their code, repository, tests, bugs, implementation, architecture, or asks to use Codex.",
+  parameters: {
+    type: "object",
+    properties: {
+      task: {
+        type: "string",
+        description:
+          "The coding or repository question Codex should investigate.",
+      },
+    },
+    required: ["task"],
+  },
+  execution_mode: "hold",
+  timeout_seconds: 120,
 },
                 ],
               },
@@ -1045,6 +1087,73 @@ description:
               `Unknown tool: ${event.name}`,
           },
         });
+
+        // ---------------------------------
+// CODEX
+// ---------------------------------
+
+if (event.name === "ask_codex") {
+  try {
+    const task = event.arguments?.task;
+
+    if (!task) {
+      throw new Error("Codex task is required.");
+    }
+
+    console.log("CODEX TOOL FIRED!");
+    console.log("Codex task:", task);
+
+    const response = await fetch("/api/codex", {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify({
+        task:
+          `${task}\n\n` +
+          "Give a concise answer suitable for being spoken aloud. " +
+          "Focus on the most important findings.",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      throw new Error(
+        `Codex request failed with status ${response.status}: ${errorText}`
+      );
+    }
+
+    const data = await response.json();
+
+    console.log("Codex result:", data.output);
+
+    pendingToolResults.push({
+      call_id: event.call_id,
+
+      result: {
+        success: true,
+        output: data.output,
+      },
+    });
+  } catch (err) {
+    console.error("Codex tool failed:", err);
+
+    pendingToolResults.push({
+      call_id: event.call_id,
+
+      result: {
+        success: false,
+        error: err.message,
+      },
+    });
+  }
+
+  return;
+}
+
       }
 
 
