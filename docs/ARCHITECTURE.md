@@ -21,10 +21,12 @@ server.js                 Express server and backend API routes
 calendar.js               Google Calendar authentication and queries
 calendar-query.js         Deterministic Calendar query interpretation
 test/calendar-query.test.js  Node tests for Calendar query interpretation
+test/calendar-tool.test.js   Node tests for Calendar HTTP execution
 public/
   index.html              Browser UI markup
   styles.css              Page styles
   app.js                  Browser application logic
+  calendar-tool.js        Browser Calendar HTTP execution
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
@@ -78,9 +80,14 @@ playback, interruption, and audio cleanup.
 `website-tool.js` owns supported-site lookup and opening allowlisted URLs in a
 new browser tab.
 
+`calendar-tool.js` owns browser-side Calendar HTTP execution: it calls the
+local Calendar endpoint and returns its existing success or failure tool-result
+data. It does not coordinate AssemblyAI sessions, tool turns, or results.
+
 `app.js` contains:
 - AssemblyAI WebSocket/session lifecycle;
-- browser-side Calendar and Codex tool execution;
+- Calendar tool-call identification and result coordination;
+- browser-side Codex tool execution;
 - website tool-result coordination;
 - asynchronous tool-result queues and turn coordination.
 
@@ -102,6 +109,11 @@ it can be tested without credentials or network access.
 This Node built-in test suite protects the current Calendar query behavior,
 including supported ranges, natural-language dates, bare ordinal dates, and
 important month-boundary cases.
+
+### `test/calendar-tool.test.js`
+
+This Node built-in test suite mocks `fetch` to protect the existing Calendar
+request URL and success, HTTP-failure, and network-failure result shapes.
 
 ### `offscreen.zip`
 
@@ -163,8 +175,8 @@ time to `GET /api/calendar/query`. `server.js` first identifies named ranges
 such as `today`. For a date-dependent query, it gets the primary Google
 Calendar timezone, passes that timezone to `calendar-query.js`, and passes the
 same timezone to `calendar.js` for the event lookup. `calendar.js` returns a
-simplified event list. The browser returns that data to AssemblyAI as a tool
-result.
+simplified event list. `calendar-tool.js` returns that data in the browser's
+Calendar tool-result shape, while `app.js` coordinates its AssemblyAI result.
 
 ### Codex flow
 

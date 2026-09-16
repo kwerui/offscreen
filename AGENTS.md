@@ -80,6 +80,9 @@ Current structure:
 - `public/website-tool.js`
   - supported website lookup and opening
 
+- `public/calendar-tool.js`
+  - browser-side Calendar HTTP execution
+
 Do not move backend credentials or Google API logic into the browser.
 
 If a feature grows substantially, prefer extracting it into a dedicated module instead of making `server.js` or `index.html` indefinitely larger.
@@ -287,7 +290,7 @@ Stop and ask for approval before:
 - making a security-sensitive change
 - performing destructive Git operations
 
-When uncertain whether a change crosses one of these boundaries, stop and explain first. 
+When uncertain whether a change crosses one of these boundaries, stop and explain first.
 
 ## Beginner-readable code
 
@@ -378,7 +381,7 @@ Use comments when:
 
 ### Complexity
 
-If there are two solutions that work equally well, prefer the one a beginner can understand more easily. 
+If there are two solutions that work equally well, prefer the one a beginner can understand more easily.
 
 ## Responsibility and module boundaries
 
@@ -443,7 +446,7 @@ Examples:
 
 Entry-point files such as `server.js` and `app.js` should primarily assemble the application.
 
-They should not gradually become containers for every implementation detail. 
+They should not gradually become containers for every implementation detail.
 
 ## Explainability requirement
 

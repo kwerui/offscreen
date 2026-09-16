@@ -51,8 +51,10 @@ features are implemented unless they appear under **Current features** above.
 page styles, and `public/ui.js` contains DOM lookup and UI rendering.
 `public/audio.js` owns microphone capture and PCM playback, and
 `public/tools.js` exports the static AssemblyAI tool definitions.
-`public/website-tool.js` owns supported website opening. `public/app.js`
-coordinates AssemblyAI sessions and browser tool handlers.
+`public/website-tool.js` owns supported website opening, and
+`public/calendar-tool.js` owns Calendar HTTP execution. `public/app.js`
+coordinates AssemblyAI sessions, tool turns, and tool results; it calls the
+Calendar module without moving Codex execution.
 The frontend will continue to be separated incrementally while preserving the
 working voice flow.
 

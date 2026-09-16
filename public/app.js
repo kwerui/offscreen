@@ -21,6 +21,7 @@ import {
 } from "./audio.js";
 import { VOICE_TOOLS } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
+import { getCalendarEvents } from "./calendar-tool.js";
 
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
@@ -465,52 +466,12 @@ import { openWebsite } from "./website-tool.js";
         // ---------------------------------
 
         if (event.name === "get_calendar_events") {
-  try {
-    const when = event.arguments?.when;
+          const result = await getCalendarEvents(event.arguments?.when);
 
-    if (!when) {
-      throw new Error(
-        "Calendar time period is required."
-      );
-    }
+          addToolResult(sessionId, toolTurnId, event.call_id, result);
 
-    console.log("Calendar tool started");
-
-    const response = await fetch(
-      `/api/calendar/query?when=${encodeURIComponent(when)}`
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-
-      throw new Error(
-        `Calendar request failed with status ${response.status}: ${errorText}`
-      );
-    }
-
-    const data = await response.json();
-
-    console.log(
-      `Calendar tool completed: ${(data.events || []).length} events`
-    );
-
-    addToolResult(sessionId, toolTurnId, event.call_id, {
-      success: true,
-      requested_when: when,
-      timezone: data.timezone,
-      events: data.events || [],
-    });
-  } catch (err) {
-    console.error("Calendar tool failed");
-
-    addToolResult(sessionId, toolTurnId, event.call_id, {
-      success: false,
-      error: err.message,
-    });
-  }
-
-  return;
-}
+          return;
+        }
 // ---------------------------------
 // CODEX
 // ---------------------------------
