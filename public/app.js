@@ -23,6 +23,7 @@ import { VOICE_TOOLS } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { runCodexTask } from "./codex-tool.js";
+import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
@@ -30,9 +31,6 @@ import { runCodexTask } from "./codex-tool.js";
       let ws = null;
       let activeSessionId = 0;
 
-      let pendingToolResults = [];
-      let activeToolTasks = 0;
-      let toolReplyDone = false;
       let activeToolTurnId = 0;
       const unresolvedCodexCalls = new Map();
 
@@ -47,11 +45,35 @@ import { runCodexTask } from "./codex-tool.js";
         );
       }
 
+      const toolResultCoordinator = createToolResultCoordinator({
+        isCurrent: isActiveToolTurn,
+        canSendResults: (sessionId, toolTurnId) => (
+          isActiveToolTurn(sessionId, toolTurnId) &&
+          ws &&
+          ws.readyState === WebSocket.OPEN
+        ),
+        sendToolResult: (sessionId, toolTurnId, callId, result) => {
+          const wasSent = sendToolResult(
+            sessionId,
+            toolTurnId,
+            callId,
+            result
+          );
+
+          if (wasSent) {
+            unresolvedCodexCalls.delete(callId);
+          }
+
+          return wasSent;
+        },
+        onFlush: (resultCount) => {
+          console.log(`Sending ${resultCount} tool result(s)`);
+        },
+      });
+
       function invalidateToolTurn() {
         activeToolTurnId++;
-        pendingToolResults = [];
-        activeToolTasks = 0;
-        toolReplyDone = false;
+        toolResultCoordinator.reset();
         clearToolStatus();
       }
 
@@ -342,7 +364,7 @@ import { runCodexTask } from "./codex-tool.js";
             break;
 
           case "input.speech.started":
-            toolReplyDone = false;
+            toolResultCoordinator.setReplyDone(false);
             break;
 
           case "transcript.user.delta":
@@ -361,7 +383,7 @@ import { runCodexTask } from "./codex-tool.js";
             break;
 
           case "reply.started":
-            toolReplyDone = false;
+            toolResultCoordinator.setReplyDone(false);
             break;
 
           case "reply.audio":
@@ -388,7 +410,7 @@ import { runCodexTask } from "./codex-tool.js";
 
           case "tool.call":  const toolTurnId = activeToolTurnId;
 
-  activeToolTasks++;
+  toolResultCoordinator.startTask();
 
             handleToolCall(event, sessionId, toolTurnId)
               .catch(() => {
@@ -399,9 +421,9 @@ import { runCodexTask } from "./codex-tool.js";
                   return;
                 }
 
-                activeToolTasks--;
+                toolResultCoordinator.finishTask();
 
-                maybeSendToolResults(sessionId, toolTurnId);
+                toolResultCoordinator.flush(sessionId, toolTurnId);
               });
 
             break;
@@ -415,9 +437,9 @@ import { runCodexTask } from "./codex-tool.js";
 
               invalidateToolTurn();
             } else {
-              toolReplyDone = true;
+              toolResultCoordinator.setReplyDone(true);
 
-              maybeSendToolResults(sessionId, activeToolTurnId);
+              toolResultCoordinator.flush(sessionId, activeToolTurnId);
             }
 
             break;
@@ -457,7 +479,7 @@ import { runCodexTask } from "./codex-tool.js";
         ) {
           const result = openWebsite(event.arguments?.site);
 
-          addToolResult(sessionId, toolTurnId, event.call_id, result);
+          toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
 
           return;
         }
@@ -469,7 +491,7 @@ import { runCodexTask } from "./codex-tool.js";
         if (event.name === "get_calendar_events") {
           const result = await getCalendarEvents(event.arguments?.when);
 
-          addToolResult(sessionId, toolTurnId, event.call_id, result);
+          toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
 
           return;
         }
@@ -498,7 +520,7 @@ if (event.name === "ask_codex") {
   const result = await runCodexTask(task);
   clearToolStatus(sessionId, toolTurnId);
 
-  addToolResult(sessionId, toolTurnId, event.call_id, result);
+  toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
 
   return;
 }
@@ -507,84 +529,13 @@ if (event.name === "ask_codex") {
 // UNKNOWN TOOL
 // ---------------------------------
 
-addToolResult(sessionId, toolTurnId, event.call_id, {
+toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
   success: false,
   error: `Unknown tool: ${event.name}`,
 });
 
       }
 
-
-      function addToolResult(sessionId, toolTurnId, callId, result) {
-        if (!isActiveToolTurn(sessionId, toolTurnId)) {
-          return;
-        }
-
-        pendingToolResults.push({
-          call_id: callId,
-          result,
-        });
-      }
-
-      function maybeSendToolResults(sessionId, toolTurnId) {
-        if (!isActiveToolTurn(sessionId, toolTurnId)) {
-          return;
-        }
-
-        if (!toolReplyDone) {
-          return;
-        }
-
-        if (
-          activeToolTasks > 0
-        ) {
-          return;
-        }
-
-        if (
-          pendingToolResults.length ===
-          0
-        ) {
-          return;
-        }
-
-        console.log(
-          `Sending ${pendingToolResults.length} tool result(s)`
-        );
-
-        sendPendingToolResults(sessionId, toolTurnId);
-
-        toolReplyDone = false;
-      }
-
-      function sendPendingToolResults(sessionId, toolTurnId) {
-        if (
-          !isActiveToolTurn(sessionId, toolTurnId) ||
-          !ws ||
-          ws.readyState !==
-            WebSocket.OPEN
-        ) {
-          return;
-        }
-
-        for (
-          const tool of
-          pendingToolResults
-        ) {
-          const wasSent = sendToolResult(
-            sessionId,
-            toolTurnId,
-            tool.call_id,
-            tool.result
-          );
-
-          if (wasSent) {
-            unresolvedCodexCalls.delete(tool.call_id);
-          }
-        }
-
-        pendingToolResults = [];
-      }
 
       function sendToolResult(sessionId, toolTurnId, callId, result) {
         if (

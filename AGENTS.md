@@ -86,6 +86,12 @@ Current structure:
 - `public/codex-tool.js`
   - browser-side Codex HTTP execution
 
+- `public/tool-result-coordinator.js`
+  - generic tool-result queue
+  - active tool-task tracking
+  - reply-done gating
+  - ordered result flushing
+
 Do not move backend credentials or Google API logic into the browser.
 
 If a feature grows substantially, prefer extracting it into a dedicated module instead of making `server.js` or `index.html` indefinitely larger.

@@ -26,7 +26,8 @@ test/codex-tool.test.js      Node tests for Codex HTTP execution
 public/
   index.html              Browser UI markup
   styles.css              Page styles
-  app.js                  Browser orchestration and tool coordination
+  app.js                  Browser orchestration, session lifecycle, and tool dispatch
+  tool-result-coordinator.js  Generic tool-result queue/task coordination
   audio.js                Microphone capture and PCM playback
   tools.js                Static AssemblyAI tool definitions
   website-tool.js         Supported website execution
@@ -94,13 +95,19 @@ calls the local Codex endpoint, and returns its existing success or failure
 tool-result data. It does not know about AssemblyAI events, interactive-call
 tracking, supersession/cancellation, sessions, tool turns, or result queues.
 
+`tool-result-coordinator.js` owns generic pending tool-result queueing,
+active-task tracking, reply-done gating, and ordered result flushing. It
+receives callbacks from `app.js` to check turn validity and send results; it
+does not own the WebSocket, session lifecycle, a tool implementation, or UI.
+
 `app.js` contains:
 - AssemblyAI WebSocket/session lifecycle;
-- Calendar tool-call identification and result coordination;
+- tool-call identification and execution dispatch;
 - Codex tool-call identification, interactive-call tracking,
-  supersession/cancellation, session/turn checks, and result coordination;
-- website tool-result coordination;
-- asynchronous tool-result queues and turn coordination.
+  supersession/cancellation, and session/turn checks;
+- website and Calendar tool-call identification;
+- the WebSocket send primitive used by normal flushing and explicit Codex
+  cancellation results.
 
 ### `public/pcm-processor.js`
 
@@ -187,15 +194,17 @@ such as `today`. For a date-dependent query, it gets the primary Google
 Calendar timezone, passes that timezone to `calendar-query.js`, and passes the
 same timezone to `calendar.js` for the event lookup. `calendar.js` returns a
 simplified event list. `calendar-tool.js` returns that data in the browser's
-Calendar tool-result shape, while `app.js` coordinates its AssemblyAI result.
+Calendar tool-result shape, while `tool-result-coordinator.js` coordinates its
+AssemblyAI result queue.
 
 ### Codex flow
 
 The `ask_codex` browser tool is identified and coordinated by `app.js`.
 `codex-tool.js` sends its task to `POST /api/codex` and returns the existing
 tool-result shape. `app.js` retains interactive call tracking,
-supersession/cancellation, session/turn checks, and generic result
-coordination. The server copies its own project directory into a temporary
+supersession/cancellation, and session/turn checks; generic queue/task result
+coordination lives in `tool-result-coordinator.js`. The server copies its own
+project directory into a temporary
 filtered inspection workspace, starts `codex exec` there in read-only and
 ephemeral modes with a restricted child environment, then returns its stdout
 as the tool result. The copy reduces exposure of repository-local secret files;

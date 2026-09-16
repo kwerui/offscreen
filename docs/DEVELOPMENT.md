@@ -156,9 +156,11 @@ execution lives in `public/website-tool.js`, Calendar HTTP execution lives in
 `public/calendar-tool.js`, and Codex HTTP execution lives in
 `public/codex-tool.js`.
 
-`public/app.js` continues to receive tool calls and coordinate their results,
+`public/app.js` continues to receive tool calls and dispatch execution,
 including Codex interactive-call tracking, supersession/cancellation, and
-session/turn protection.
+session/turn protection. `public/tool-result-coordinator.js` coordinates the
+generic pending-result queue, active tasks, reply-done state, and result
+flushing.
 
 When adding a tool:
 
@@ -166,7 +168,7 @@ When adding a tool:
 2. Decide whether the action is truly browser-only.
 3. Put browser-only action logic in a focused module, and keep the matching
    `handleToolCall` branch in `public/app.js` responsible for passing its
-   result to `addToolResult`.
+   result to the tool-result coordinator.
 4. Validate tool arguments before acting.
 5. Return an explicit success or failure result with the incoming `call_id`.
 6. Preserve session/turn isolation. If the tool is interactive and can be

@@ -53,9 +53,10 @@ page styles, and `public/ui.js` contains DOM lookup and UI rendering.
 `public/tools.js` exports the static AssemblyAI tool definitions.
 `public/website-tool.js` owns supported website opening, and
 `public/calendar-tool.js` owns Calendar HTTP execution. `public/codex-tool.js`
-owns Codex HTTP execution. `public/app.js` coordinates AssemblyAI sessions,
-tool turns, and tool results, including Codex interactive-call tracking,
-supersession/cancellation, and session/turn checks.
+owns Codex HTTP execution. `public/tool-result-coordinator.js` owns generic
+tool-result queue, task, reply-done, and flush coordination. `public/app.js`
+keeps AssemblyAI session lifecycle, tool turns, session/turn checks, and Codex
+interactive-call tracking and supersession/cancellation.
 The frontend will continue to be separated incrementally while preserving the
 working voice flow.
 
