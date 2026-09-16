@@ -584,12 +584,12 @@ let toolStatusTurnId = null;
 
         try {
           token = await fetchToken();
-        } catch (err) {
+        } catch {
           if (!isActiveSession(sessionId)) {
             return;
           }
 
-          console.error(err);
+          console.error("Token request failed");
 
           endActiveSession("error", "Token error");
 
@@ -903,8 +903,7 @@ description:
 
           console.log(
             "WebSocket closed:",
-            event.code,
-            event.reason
+            event.code
           );
 
           endActiveSession();
@@ -947,20 +946,13 @@ description:
         ) {
           console.log(
             "AssemblyAI event:",
-            event
+            event.type
           );
         }
 
         switch (event.type) {
           case "session.ready":
-            console.log(
-              "READY TOOLS:",
-              JSON.stringify(
-                event.config?.tools,
-                null,
-                2
-              )
-            );
+            console.log("Voice session ready");
 
             setStatus(
               "connected",
@@ -977,18 +969,7 @@ description:
             break;
 
           case "session.updated":
-            console.log(
-              "Session configuration applied."
-            );
-
-            console.log(
-              "SESSION TOOLS:",
-              JSON.stringify(
-                event.config?.tools,
-                null,
-                2
-              )
-            );
+            console.log("Voice session updated");
 
             break;
 
@@ -1066,11 +1047,8 @@ description:
   activeToolTasks++;
 
             handleToolCall(event, sessionId, toolTurnId)
-              .catch((err) => {
-                console.error(
-                  "Tool handler failed:",
-                  err
-                );
+              .catch(() => {
+                console.error("Tool handler failed");
               })
               .finally(() => {
                 if (!isActiveToolTurn(sessionId, toolTurnId)) {
@@ -1103,7 +1081,7 @@ description:
           case "session.error":
             console.error(
               "Session error:",
-              event
+              event.code
             );
 
             setStatus(
@@ -1121,9 +1099,8 @@ description:
         toolTurnId
       ) {
         console.log(
-          "TOOL CALLED:",
-          event.name,
-          event.arguments
+          "Tool called:",
+          event.name
         );
 
         // ---------------------------------
@@ -1196,8 +1173,7 @@ description:
       );
     }
 
-    console.log("CALENDAR TOOL FIRED!");
-    console.log("Requested time:", when);
+    console.log("Calendar tool started");
 
     const response = await fetch(
       `/api/calendar/query?when=${encodeURIComponent(when)}`
@@ -1213,7 +1189,9 @@ description:
 
     const data = await response.json();
 
-    console.log("Calendar result:", data);
+    console.log(
+      `Calendar tool completed: ${(data.events || []).length} events`
+    );
 
     addToolResult(sessionId, toolTurnId, event.call_id, {
       success: true,
@@ -1222,7 +1200,7 @@ description:
       events: data.events || [],
     });
   } catch (err) {
-    console.error("Calendar tool failed:", err);
+    console.error("Calendar tool failed");
 
     addToolResult(sessionId, toolTurnId, event.call_id, {
       success: false,
@@ -1244,8 +1222,7 @@ if (event.name === "ask_codex") {
       throw new Error("Codex task is required.");
     }
 
-    console.log("CODEX TOOL FIRED!");
-    console.log("Codex task:", task);
+    console.log("Codex tool started");
 
     showToolStatus(
   "Codex is checking your project…",
@@ -1272,7 +1249,7 @@ if (event.name === "ask_codex") {
 
     const data = await response.json();
     clearToolStatus(sessionId, toolTurnId);
-    console.log("Codex result:", data.output);
+    console.log("Codex tool completed");
 
     addToolResult(sessionId, toolTurnId, event.call_id, {
       success: true,
@@ -1280,7 +1257,7 @@ if (event.name === "ask_codex") {
     });
   } catch (err) {
     clearToolStatus(sessionId, toolTurnId);
-    console.error("Codex tool failed:", err);
+    console.error("Codex tool failed");
 
     addToolResult(sessionId, toolTurnId, event.call_id, {
       success: false,
@@ -1337,8 +1314,7 @@ addToolResult(sessionId, toolTurnId, event.call_id, {
         }
 
         console.log(
-          "Sending tool results:",
-          pendingToolResults
+          `Sending ${pendingToolResults.length} tool result(s)`
         );
 
         sendPendingToolResults(sessionId, toolTurnId);
