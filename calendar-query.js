@@ -1,4 +1,5 @@
 import * as chrono from "chrono-node";
+import { DateTime } from "luxon";
 
 const RANGE_BY_QUERY = {
   upcoming: "upcoming",
@@ -10,7 +11,7 @@ const RANGE_BY_QUERY = {
   "next month": "next_month",
 };
 
-export function parseCalendarQuery(when, referenceDate = new Date()) {
+export function parseCalendarQuery(when, referenceDate = new Date(), timezone) {
   const normalizedQuery = when.toLowerCase();
   const range = RANGE_BY_QUERY[normalizedQuery];
 
@@ -26,8 +27,16 @@ export function parseCalendarQuery(when, referenceDate = new Date()) {
   );
 
   const parsedDate = bareDayMatch
-    ? getNextDateForDayOfMonth(Number(bareDayMatch[1]), referenceDate)
-    : chrono.parseDate(when, referenceDate, { forwardDate: true });
+    ? getNextDateForDayOfMonth(
+        Number(bareDayMatch[1]),
+        referenceDate,
+        timezone
+      )
+    : chrono.parseDate(
+        when,
+        getChronoReferenceDate(referenceDate, timezone),
+        { forwardDate: true }
+      );
 
   if (!parsedDate) {
     return null;
@@ -35,13 +44,36 @@ export function parseCalendarQuery(when, referenceDate = new Date()) {
 
   return {
     type: "date",
-    date: formatDate(parsedDate),
+    date: formatDate(parsedDate, timezone),
   };
 }
 
-function getNextDateForDayOfMonth(dayOfMonth, referenceDate) {
+function getChronoReferenceDate(referenceDate, timezone) {
+  if (!timezone) {
+    return referenceDate;
+  }
+
+  const calendarReferenceDate = DateTime.fromJSDate(referenceDate).setZone(
+    timezone
+  );
+
+  return {
+    instant: referenceDate,
+    timezone: calendarReferenceDate.offset,
+  };
+}
+
+function getNextDateForDayOfMonth(dayOfMonth, referenceDate, timezone) {
   if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
     return null;
+  }
+
+  if (timezone) {
+    return getNextDateForDayOfMonthInTimezone(
+      dayOfMonth,
+      referenceDate,
+      timezone
+    );
   }
 
   const today = new Date(
@@ -70,7 +102,33 @@ function getNextDateForDayOfMonth(dayOfMonth, referenceDate) {
   return null;
 }
 
-function formatDate(date) {
+function getNextDateForDayOfMonthInTimezone(dayOfMonth, referenceDate, timezone) {
+  const today = DateTime.fromJSDate(referenceDate)
+    .setZone(timezone)
+    .startOf("day");
+
+  for (let monthOffset = 0; monthOffset < 12; monthOffset++) {
+    const candidateMonth = today.plus({ months: monthOffset });
+
+    if (dayOfMonth > candidateMonth.daysInMonth) {
+      continue;
+    }
+
+    const candidate = candidateMonth.set({ day: dayOfMonth });
+
+    if (candidate >= today) {
+      return candidate.toJSDate();
+    }
+  }
+
+  return null;
+}
+
+function formatDate(date, timezone) {
+  if (timezone) {
+    return DateTime.fromJSDate(date).setZone(timezone).toISODate();
+  }
+
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, "0"),

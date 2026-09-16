@@ -9,6 +9,7 @@
 import {
   getCalendarEvents,
   getCalendarEventsForDate,
+  getPrimaryCalendarTimezone,
 } from "./calendar.js";
 import { parseCalendarQuery } from "./calendar-query.js";
 import express from "express";
@@ -115,7 +116,19 @@ app.get("/api/calendar/query", async (req, res) => {
       return res.json(data);
     }
 
-    const data = await getCalendarEventsForDate(calendarQuery.date);
+    // Validate before authenticating, then interpret date-dependent language
+    // using the timezone configured on the user's primary Google Calendar.
+    const calendarTimezone = await getPrimaryCalendarTimezone();
+    const timezoneAwareQuery = parseCalendarQuery(
+      when,
+      new Date(),
+      calendarTimezone
+    );
+
+    const data = await getCalendarEventsForDate(
+      timezoneAwareQuery.date,
+      calendarTimezone
+    );
 
     res.json(data);
   } catch (err) {

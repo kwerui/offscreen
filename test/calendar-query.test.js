@@ -70,3 +70,57 @@ test("rejects unsupported calendar input", () => {
   assert.equal(parseCalendarQuery("not a date", referenceDate), null);
   assert.equal(parseCalendarQuery("32nd", referenceDate), null);
 });
+
+test("keeps named today and tomorrow ranges unchanged with a Calendar timezone", () => {
+  const referenceInstant = new Date("2026-01-01T01:30:00Z");
+  const calendarTimezone = "Pacific/Auckland";
+
+  assert.deepEqual(
+    parseCalendarQuery("today", referenceInstant, calendarTimezone),
+    { type: "range", range: "today" }
+  );
+  assert.deepEqual(
+    parseCalendarQuery("tomorrow", referenceInstant, calendarTimezone),
+    { type: "range", range: "tomorrow" }
+  );
+});
+
+test("uses the Calendar timezone when resolving a weekday", () => {
+  // At this instant it is Thursday in America/Cayman but Friday in Auckland.
+  const referenceInstant = new Date("2026-01-02T01:30:00Z");
+
+  assert.deepEqual(
+    parseCalendarQuery("Friday", referenceInstant, "Pacific/Auckland"),
+    {
+      type: "date",
+      date: "2026-01-09",
+    }
+  );
+});
+
+test("uses the Calendar timezone when resolving a bare ordinal date", () => {
+  // At this instant it is the 28th in America/Cayman but the 29th in Auckland.
+  const referenceInstant = new Date("2026-01-29T01:30:00Z");
+
+  assert.deepEqual(
+    parseCalendarQuery("28th", referenceInstant, "Pacific/Auckland"),
+    {
+      type: "date",
+      date: "2026-02-28",
+    }
+  );
+});
+
+test("uses the Calendar timezone when resolving a natural-language date", () => {
+  // At this instant it is still December 31 in America/Cayman but January 1
+  // in Auckland, so the next January 1 is in 2027 for that Calendar.
+  const referenceInstant = new Date("2026-01-01T01:30:00Z");
+
+  assert.deepEqual(
+    parseCalendarQuery("January 1st", referenceInstant, "Pacific/Auckland"),
+    {
+      type: "date",
+      date: "2027-01-01",
+    }
+  );
+});

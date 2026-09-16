@@ -143,11 +143,12 @@ The current implementation tracks this with shared counters and arrays in
 ### Google Calendar flow
 
 The `get_calendar_events` browser tool sends the requested natural-language
-time to `GET /api/calendar/query`. `server.js` passes the query to
-`calendar-query.js`, which recognizes named ranges such as `today` or returns
-a parsed date. `calendar.js` asks Google for events in the primary Calendar
-timezone and returns a simplified event list. The browser returns that data to
-AssemblyAI as a tool result.
+time to `GET /api/calendar/query`. `server.js` first identifies named ranges
+such as `today`. For a date-dependent query, it gets the primary Google
+Calendar timezone, passes that timezone to `calendar-query.js`, and passes the
+same timezone to `calendar.js` for the event lookup. `calendar.js` returns a
+simplified event list. The browser returns that data to AssemblyAI as a tool
+result.
 
 ### Codex flow
 
@@ -190,12 +191,11 @@ These are audit findings, not evidence that every path currently fails.
   voice tool's 45-second timeout. It also limits task and captured-output size
   and uses one response guard so timeout, process error, and close events do
   not send competing HTTP responses.
-- Natural-language dates are parsed in server time while Calendar queries use
-  Calendar time, which can be wrong near timezone boundaries.
 - `calendar.js` duplicates Calendar client/timezone/event-formatting work in
   its two exported functions.
-- Calendar parsing is isolated and covered by Node tests, but Calendar
-  timezone handling remains a later concern.
+- Calendar parsing is isolated and covered by Node tests, including fixed
+  timezone-boundary cases. Real Google Calendar access still needs manual
+  integration verification.
 - Multiple Calendar endpoints exist, but only the query endpoint has a
   current in-repository browser caller.
 - The initial automated suite covers only deterministic Calendar-query logic;

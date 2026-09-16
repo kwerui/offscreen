@@ -26,6 +26,20 @@ async function getAuthClient() {
   return authClient;
 }
 
+export async function getPrimaryCalendarTimezone() {
+  const auth = await getAuthClient();
+  const calendar = google.calendar({
+    version: "v3",
+    auth,
+  });
+
+  const calendarInfo = await calendar.calendars.get({
+    calendarId: "primary",
+  });
+
+  return calendarInfo.data.timeZone || "UTC";
+}
+
 export async function getCalendarEvents(range = "upcoming") {
   const auth = await getAuthClient();
 
@@ -115,7 +129,7 @@ export async function getCalendarEvents(range = "upcoming") {
   };
 }
 
-export async function getCalendarEventsForDate(date) {
+export async function getCalendarEventsForDate(date, calendarTimezone) {
   const auth = await getAuthClient();
 
   const calendar = google.calendar({
@@ -123,11 +137,7 @@ export async function getCalendarEventsForDate(date) {
     auth,
   });
 
-  const calendarInfo = await calendar.calendars.get({
-    calendarId: "primary",
-  });
-
-  const timezone = calendarInfo.data.timeZone || "UTC";
+  const timezone = calendarTimezone || (await getPrimaryCalendarTimezone());
 
   const day = DateTime.fromISO(date, {
     zone: timezone,
