@@ -134,8 +134,8 @@ React, a bundler, or a state-management library:
 - individual browser tool handlers.
 
 For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
-`voice-session.js`, `tools.js`, and a small `app.js` entry point. These files
-do not exist yet. Make one extract at a time and verify the full voice flow
+`voice-session.js`, `tools.js`, and a small `app.js` entry point. `styles.css`
+now exists; make one extract at a time and verify the full voice flow
 after each extract.
 
 ## Phase 6 — Planned product work

@@ -47,7 +47,7 @@ controls, developer workspace actions, personal productivity integrations, and
 search tools, is listed in [ROADMAP.md](ROADMAP.md). None of those planned
 features are implemented unless they appear under **Current features** above.
 
-`public/index.html` currently holds markup, CSS, UI rendering, audio handling,
+`public/index.html` currently holds markup, UI rendering, audio handling,
 AssemblyAI/session coordination, and browser tool handlers. The next
 structural refactor will separate those responsibilities incrementally while
 preserving the working voice flow; it has not started yet.
