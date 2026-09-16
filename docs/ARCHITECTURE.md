@@ -184,9 +184,10 @@ These are audit findings, not evidence that every path currently fails.
 - Each voice connection has a monotonically increasing session ID. Disconnect
   invalidates that ID before closing the socket and releasing microphone/audio
   resources, so callbacks from an older connection are ignored.
-- Each tool call captures its originating session ID. Late Calendar or Codex
-  completions are ignored after disconnect/reconnect instead of altering the
-  current session's queue, counters, or tool-status display.
+- Each tool call captures its originating session ID and tool-turn generation.
+  Each non-empty finalized user transcript starts a new tool generation.
+  Late Calendar or Codex completions from an older turn are ignored instead of
+  altering a newer turn's queue, counters, tool results, or status display.
 - The Codex route now limits each local process to 40 seconds, below the
   voice tool's 45-second timeout. It also limits task and captured-output size
   and uses one response guard so timeout, process error, and close events do

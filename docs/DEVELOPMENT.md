@@ -203,10 +203,13 @@ security-sensitive integration, stop and get explicit approval.
   in the browser console.
 - Confirm the tool handler places a result with the original `call_id` into the
   pending result queue.
-- Check whether the voice reply was interrupted; the current implementation
-  clears pending results when an interrupted reply is reported.
-- A result that finishes after its voice session disconnects is ignored. After
-  reconnecting, retry the request in the new session.
+- Each non-empty finalized user transcript starts a new tool turn and
+  invalidates asynchronous tool work from the previous turn.
+- A Calendar or Codex task that finishes after its tool turn becomes stale is
+  ignored instead of changing the newer turn's queue, counters, status, or
+  tool results.
+- A result that finishes after its voice session disconnects is also ignored.
+  After reconnecting, retry the request in the new session.
 
 ### WebSocket problems
 

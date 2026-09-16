@@ -28,7 +28,8 @@ const PORT = process.env.PORT || 3000;
 const TOKEN_TTL_SECONDS = 300; // 1-600
 const CODEX_TIMEOUT_MS = 40_000;
 const MAX_CODEX_TASK_CHARACTERS = 4_000;
-const MAX_CODEX_OUTPUT_BYTES = 16 * 1024;
+const MAX_CODEX_STDOUT_BYTES = 16 * 1024;
+const MAX_CODEX_STDERR_BYTES = 64 * 1024;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -209,7 +210,9 @@ app.post("/api/codex", async (req, res) => {
 
   let stdout = "";
   let stderr = "";
-  let capturedOutputBytes = 0;
+  let capturedStdoutBytes = 0;
+  let capturedStderrBytes = 0;
+  let stderrWasTruncated = false;
   let hasResponded = false;
   let timeoutId = null;
 
@@ -246,19 +249,36 @@ app.post("/api/codex", async (req, res) => {
 
     const chunkBytes = Buffer.byteLength(data);
 
-    if (capturedOutputBytes + chunkBytes > MAX_CODEX_OUTPUT_BYTES) {
-      console.error("Codex output exceeded the capture limit");
-      sendResponseOnce(500, { error: "Codex produced too much output" });
-      terminateCodexProcess();
+    if (streamName === "stdout") {
+      if (capturedStdoutBytes + chunkBytes > MAX_CODEX_STDOUT_BYTES) {
+        console.error("Codex stdout exceeded the capture limit");
+        sendResponseOnce(500, { error: "Codex produced too much output" });
+        terminateCodexProcess();
+        return;
+      }
+
+      capturedStdoutBytes += chunkBytes;
+      stdout += data.toString();
       return;
     }
 
-    capturedOutputBytes += chunkBytes;
+    if (capturedStderrBytes >= MAX_CODEX_STDERR_BYTES) {
+      stderrWasTruncated = true;
+      return;
+    }
 
-    if (streamName === "stdout") {
-      stdout += data.toString();
-    } else {
-      stderr += data.toString();
+    const remainingStderrBytes =
+      MAX_CODEX_STDERR_BYTES - capturedStderrBytes;
+    const capturedChunk = data.subarray(
+      0,
+      remainingStderrBytes
+    );
+
+    stderr += capturedChunk.toString();
+    capturedStderrBytes += capturedChunk.length;
+
+    if (capturedChunk.length < chunkBytes) {
+      stderrWasTruncated = true;
     }
   }
 
@@ -289,7 +309,11 @@ app.post("/api/codex", async (req, res) => {
     console.log(`Codex exited with code ${code}`);
 
     if (code !== 0) {
-      console.error(`Codex stderr captured (${Buffer.byteLength(stderr)} bytes)`);
+      console.error(
+        `Codex stderr captured (${capturedStderrBytes} bytes${
+          stderrWasTruncated ? ", truncated" : ""
+        })`
+      );
       sendResponseOnce(500, { error: "Codex could not complete the request" });
       return;
     }
