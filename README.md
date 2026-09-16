@@ -20,8 +20,11 @@ Codex CLI to inspect the current project.
 - Local Codex project inspection through the Codex CLI in a read-only sandbox.
   It returns concise repository and code analysis; it does not modify the
   project.
-- A new voice request can proceed while an earlier interactive Codex request
-  is still running. Results from an older session or an earlier finalized user turn are ignored.
+- Calendar uses the Voice Agent tool setting `execution_mode: "hold"`; Codex
+  inspection uses `execution_mode: "interactive"`.
+- Voice session and tool results are isolated with `sessionId` and
+  `toolTurnId`. When a newer user turn supersedes an interactive Codex call,
+  the browser explicitly resolves the original `call_id` as cancelled.
 
 Opening Gmail only opens the Gmail website. Offscreen does not read email.
 
@@ -36,6 +39,18 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
 4. Calendar requests use server-side Google OAuth. Codex requests run the
    local Codex CLI with a read-only sandbox. Each result is returned through
    the voice session so the agent can respond.
+
+## Planned direction
+
+The current demo is intentionally bounded. Planned work, including voice
+controls, developer workspace actions, personal productivity integrations, and
+search tools, is listed in [ROADMAP.md](ROADMAP.md). None of those planned
+features are implemented unless they appear under **Current features** above.
+
+`public/index.html` currently holds markup, CSS, UI rendering, audio handling,
+AssemblyAI/session coordination, and browser tool handlers. The next
+structural refactor will separate those responsibilities incrementally while
+preserving the working voice flow; it has not started yet.
 
 ## Tech stack
 

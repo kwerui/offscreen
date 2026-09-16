@@ -122,32 +122,72 @@ redesign.
 **Priority: BEFORE SUBMISSION only if Phases 1–4 are stable; otherwise LATER.
 Depends on Phase 2.**
 
-Gradually split the current browser script into native ES modules without
-introducing React, a bundler, or a state-management library:
+`public/index.html` currently contains too many responsibilities. Gradually
+separate the current browser code into native ES modules without introducing
+React, a bundler, or a state-management library:
 
-- proposed `app.js`: connection-state orchestration and event wiring;
-- proposed `voice-session.js`: AssemblyAI WebSocket protocol and lifecycle;
-- proposed `audio.js`: microphone capture, PCM transport, and playback;
-- proposed `tools.js`: tool definitions and browser-side tool execution;
-- proposed `ui.js`: transcript and status rendering.
+- static HTML;
+- CSS;
+- UI rendering;
+- audio capture and playback;
+- AssemblyAI/session lifecycle and turn coordination;
+- individual browser tool handlers.
 
-`public/index.html` should remain the page markup, styles, controls, and module
-entry point. Make one extract at a time and verify the full voice flow after
-each extract.
+For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
+`voice-session.js`, `tools.js`, and a small `app.js` entry point. These files
+do not exist yet. Make one extract at a time and verify the full voice flow
+after each extract.
 
-## Phase 6 — Remaining product work
+## Phase 6 — Planned product work
 
 **Priority: BEFORE SUBMISSION only after Phases 1–3 are stable; otherwise LATER.
 Depends on a reliable baseline.**
 
-Do not invent new features during the cleanup.
+These are proposals, not current features or commitments. Do not add them
+during cleanup work without a focused feature specification.
 
-Product directions already discussed include:
-- Gmail/read-only email assistance;
-- developer/productivity workflows;
-- additional bounded low-screen computer actions.
+### Voice / session control
 
-These are proposals, not current features or commitments.
+- Disconnect by voice.
+- Stop listening.
+- Stop current speech.
+- Cancel current work.
+- Repeat the last response.
+- Shorten or summarize the last response.
+- Report the current activity or running tool by voice.
+
+### Developer workspace
+
+- Read and search project files.
+- Inspect the current workspace or project.
+- Show Git status and changed files.
+- Run the project's known test command and summarize test failures.
+- Open a project or file in VS Code.
+- Support contextual follow-ups such as “open that file,” “run the tests
+  again,” “which one failed?”, and “ask Codex why.”
+
+### Personal productivity
+
+- Gmail read-only access.
+- Local tasks, notes, and reminders.
+- A combined daily briefing using Calendar, Gmail, and tasks.
+- Create, list, complete, and remove local tasks.
+- Local notes and reminders.
+
+### Web
+
+- Search or open GitHub queries.
+- Search or open YouTube queries.
+- General web search.
+
+### Later / guarded writes
+
+- Create or edit Calendar events only with explicit confirmation.
+- Send email only with explicit confirmation.
+
+### Non-goal for the hackathon MVP
+
+- Arbitrary spoken shell commands or arbitrary computer execution.
 
 Before adding any of these, write a small feature specification covering user
 value, permissions, security boundary, tool behavior, failure behavior, and

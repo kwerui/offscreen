@@ -160,6 +160,10 @@ Async code must make ownership and cleanup clear.
   connection.
 - Every async operation needs an explicit success path and failure path.
 - Disconnecting must stop or invalidate work that can still finish later.
+- Associate each asynchronous tool operation with its `sessionId` and
+  `toolTurnId`; do not let an earlier operation update a newer turn.
+- When superseding an interactive tool call that requires a result, resolve
+  the original `call_id` explicitly before invalidating its turn.
 - Timeouts must agree across layers. For example, a server-side Codex timeout
   must finish before the voice tool's declared timeout.
 - Do not reuse a global result queue for a newer session without identifying

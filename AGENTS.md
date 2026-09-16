@@ -11,7 +11,12 @@ Current core features:
 - voice-controlled website opening
 - Google Calendar read-only queries
 - natural-language date parsing
-- future integrations may include Gmail and developer workflows
+- local Codex read-only repository inspection
+- session and tool-turn isolation for asynchronous tool results
+
+Planned features, including Gmail and broader developer workflows, are not
+current functionality. See `ROADMAP.md` before treating a planned item as in
+scope.
 
 The hackathon deadline is close, so prioritize reliable, demo-ready functionality over unnecessary complexity.
 
@@ -51,6 +56,8 @@ Current structure:
   - AssemblyAI WebSocket session
   - microphone/audio handling
   - browser-side tool execution
+  - currently also contains markup, CSS, rendering, and turn coordination;
+    split these responsibilities incrementally rather than rewriting it
 
 - `public/pcm-processor.js`
   - microphone PCM audio processing
@@ -432,4 +439,4 @@ When making a non-trivial change, Codex must be able to explain:
 
 Prefer implementations the user can understand and maintain themselves.
 
-If a proposed implementation is significantly more advanced than necessary, choose a simpler implementation or explain why the complexity is required. 
+If a proposed implementation is significantly more advanced than necessary, choose a simpler implementation or explain why the complexity is required.

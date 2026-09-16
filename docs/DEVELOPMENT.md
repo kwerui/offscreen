@@ -65,9 +65,10 @@ Run:
 npm start
 ```
 
-The current start command runs `node server.js`. By default the server reports
-a local URL such as `http://localhost:3000`. Open that URL in a browser, choose
-a voice/prompt if desired, then select **Connect** and grant microphone access.
+The current start command runs `node server.js`. The server binds only to
+`127.0.0.1`; by default it reports `http://127.0.0.1:3000`. Open that URL in a
+browser, choose a voice/prompt if desired, then select **Connect** and grant
+microphone access.
 
 ## Tests
 
@@ -122,9 +123,15 @@ The current browser sends tool definitions as part of its WebSocket
 description, parameter shape, and timeout. When the model decides a tool is
 needed, it sends the browser a `tool.call` event with a call ID and arguments.
 
-The browser must return a result using the same call ID. A successful result
-and a failed result should both be explicit; never pretend an external action
-succeeded when it did not.
+The browser must return a result using the same `call_id`. Calendar currently
+uses `execution_mode: "hold"`; `ask_codex` uses `execution_mode:
+"interactive"`. A successful result and a failed result should both be
+explicit; never pretend an external action succeeded when it did not.
+
+Each operation also belongs to the active `sessionId` and `toolTurnId`. On a
+new finalized user turn, the browser resolves an earlier interactive Codex
+call as cancelled with that call's original `call_id`; completions that arrive
+after their session or turn becomes stale are ignored.
 
 ## Adding a browser-side tool
 
@@ -139,8 +146,10 @@ careful change in that file:
 3. Add a matching branch in `handleToolCall`.
 4. Validate tool arguments before acting.
 5. Push an explicit success or failure object with the incoming `call_id`.
-6. Update the system prompt only when the agent needs routing instructions.
-7. Manually verify success, unsupported/invalid input, and a tool failure.
+6. Preserve session/turn isolation. If the new tool is interactive and can be
+   superseded, define how its original `call_id` is resolved.
+7. Update the system prompt only when the agent needs routing instructions.
+8. Manually verify success, unsupported/invalid input, and a tool failure.
 
 Keep the browser allowlist explicit. Do not turn a spoken site name into an
 arbitrary URL without a deliberate security design.

@@ -68,7 +68,8 @@ contains:
 - transcript and status rendering;
 - AssemblyAI tool definitions;
 - browser-side website, Calendar, and Codex tool handling;
-- asynchronous tool-result queues and connection lifecycle state.
+- asynchronous tool-result queues and connection lifecycle state, including
+  `sessionId` and `toolTurnId` isolation.
 
 This works as a compact prototype, but it is the main concentration of
 responsibility in the repository.
@@ -136,9 +137,14 @@ Microphone
 
 AssemblyAI sends a `tool.call` event. The browser dispatches it by tool name,
 performs the requested browser or backend action, adds a result to a pending
-queue, and later sends `tool.result` messages when the reply/tool timing allows.
-The current implementation tracks this with shared counters and arrays in
-`index.html`.
+queue, and later sends `tool.result` messages when the reply/tool timing
+allows. Calendar uses `execution_mode: "hold"`; `ask_codex` uses
+`execution_mode: "interactive"`.
+
+Every connection and tool call carries the current `sessionId` and
+`toolTurnId`. This prevents an old request from changing a newer turn. A new
+finalized user turn explicitly resolves any superseded interactive Codex call
+with its original `call_id` before the old completion can be ignored.
 
 ### Google Calendar flow
 
@@ -184,10 +190,12 @@ These are audit findings, not evidence that every path currently fails.
 - Each voice connection has a monotonically increasing session ID. Disconnect
   invalidates that ID before closing the socket and releasing microphone/audio
   resources, so callbacks from an older connection are ignored.
-- Each tool call captures its originating session ID and tool-turn generation.
+- Each tool call captures its originating `sessionId` and `toolTurnId`.
   Each non-empty finalized user transcript starts a new tool generation.
   Late Calendar or Codex completions from an older turn are ignored instead of
   altering a newer turn's queue, counters, tool results, or status display.
+  Before the turn changes, a superseded interactive Codex call is explicitly
+  resolved with its original `call_id`.
 - The Codex route now limits each local process to 40 seconds, below the
   voice tool's 45-second timeout. It also limits task and captured-output size
   and uses one response guard so timeout, process error, and close events do
@@ -217,7 +225,8 @@ server.js                         application assembly and static hosting
   codex-runner.js                 proposed bounded Codex process runner
 
 public/
-  index.html                      markup, CSS, controls, module entry point
+  index.html                      proposed static markup and module entry point
+  styles.css                      proposed page styles
   app.js                          proposed browser orchestration
   voice-session.js                proposed AssemblyAI session lifecycle
   audio.js                        proposed microphone and playback logic
@@ -241,10 +250,11 @@ tests and manual verification protect the current behavior.
 | `calendar.js` | Authenticate with Google, obtain Calendar context, fetch, and format events. |
 | `codex-runner.js` | Start, time-limit, and normalize the read-only Codex process. |
 | `app.js` | Coordinate UI actions and one active voice session. |
-| `voice-session.js` | Own WebSocket messages, session generation, and stale-event protection. |
+| `voice-session.js` | Own WebSocket messages, session generation, turn coordination, and stale-event protection. |
 | `audio.js` | Capture, convert/send, schedule, stop, and clean up audio. |
 | `tools.js` | Define supported tools and return a normalized tool result. |
 | `ui.js` | Update status and transcript DOM elements. |
+| `styles.css` | Hold the page styles currently embedded in `index.html`. |
 
 ## Rules for deciding where new code belongs
 
