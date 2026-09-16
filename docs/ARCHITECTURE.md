@@ -186,8 +186,10 @@ These are audit findings, not evidence that every path currently fails.
 - Each tool call captures its originating session ID. Late Calendar or Codex
   completions are ignored after disconnect/reconnect instead of altering the
   current session's queue, counters, or tool-status display.
-- The Codex tool declares a shorter voice timeout than the server process
-  timeout, which can create late-result behavior.
+- The Codex route now limits each local process to 40 seconds, below the
+  voice tool's 45-second timeout. It also limits task and captured-output size
+  and uses one response guard so timeout, process error, and close events do
+  not send competing HTTP responses.
 - Natural-language dates are parsed in server time while Calendar queries use
   Calendar time, which can be wrong near timezone boundaries.
 - `calendar.js` duplicates Calendar client/timezone/event-formatting work in

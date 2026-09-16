@@ -222,13 +222,15 @@ security-sensitive integration, stop and get explicit approval.
 
 ### Slow Codex requests
 
-- The current voice tool timeout is shorter than the server-side Codex process
-  timeout. A slow request can therefore outlive the voice tool's wait period.
+- The server stops a Codex process after 40 seconds, before the voice tool's
+  45-second timeout. The browser receives the short error `Codex request timed
+  out` rather than a partial answer.
 - Keep requested Codex tasks focused and ask it to inspect only the files
   needed for the answer.
-- Check the server terminal for `CODEX TASK`, process errors, and exit code.
-- Do not treat a late response as proof the voice tool completed successfully.
-  Timeout alignment is planned in the reliability phase.
+- Check the server terminal for the task-size log, timeout message, process
+  error, output-limit message, or exit code.
+- Process failures return a short browser-safe message. Inspect server
+  diagnostics for the cause; raw Codex stderr is not sent to the browser.
 
 ## Useful checkpoints
 

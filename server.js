@@ -25,6 +25,9 @@ if (!API_KEY) {
 
 const PORT = process.env.PORT || 3000;
 const TOKEN_TTL_SECONDS = 300; // 1-600
+const CODEX_TIMEOUT_MS = 40_000;
+const MAX_CODEX_TASK_CHARACTERS = 4_000;
+const MAX_CODEX_OUTPUT_BYTES = 16 * 1024;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -155,27 +158,33 @@ app.post("/api/codex", async (req, res) => {
     });
   }
 
- console.log("CODEX TASK:", task);
+  if (task.length > MAX_CODEX_TASK_CHARACTERS) {
+    return res.status(400).json({
+      error: "Codex task is too long",
+    });
+  }
 
-const codexTask =
-  `${task}\n\n` +
-  "Answer in at most 3 short sentences. " +
-  "Do not use subagents or delegate this task. " +
-  "Do not perform a broad repository review unless necessary. " +
-  "Inspect only the minimum files needed to answer the question. " +
-  "Stop as soon as you have enough information to answer.";
+  console.log(`Codex task received (${task.length} characters)`);
 
-const child = spawn(
-  "codex",
-  [
-    "exec",
-    "--ephemeral",
-    "--sandbox",
-    "read-only",
-    "-c",
-    'model_reasoning_effort="low"',
-    codexTask,
-  ],
+  const codexTask =
+    `${task}\n\n` +
+    "Answer in at most 3 short sentences. " +
+    "Do not use subagents or delegate this task. " +
+    "Do not perform a broad repository review unless necessary. " +
+    "Inspect only the minimum files needed to answer the question. " +
+    "Stop as soon as you have enough information to answer.";
+
+  const child = spawn(
+    "codex",
+    [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "-c",
+      'model_reasoning_effort="low"',
+      codexTask,
+    ],
 
     {
       cwd: process.cwd(),
@@ -187,45 +196,92 @@ const child = spawn(
 
   let stdout = "";
   let stderr = "";
+  let capturedOutputBytes = 0;
+  let hasResponded = false;
+  let timeoutId = null;
+
+  function sendResponseOnce(status, responseBody) {
+    if (hasResponded) {
+      return;
+    }
+
+    hasResponded = true;
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    res.status(status).json(responseBody);
+  }
+
+  function terminateCodexProcess() {
+    if (child.killed || child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+
+    try {
+      child.kill("SIGTERM");
+    } catch (error) {
+      console.error("Could not terminate Codex process:", error.message);
+    }
+  }
+
+  function captureCodexOutput(streamName, data) {
+    if (hasResponded) {
+      return;
+    }
+
+    const chunkBytes = Buffer.byteLength(data);
+
+    if (capturedOutputBytes + chunkBytes > MAX_CODEX_OUTPUT_BYTES) {
+      console.error("Codex output exceeded the capture limit");
+      sendResponseOnce(500, { error: "Codex produced too much output" });
+      terminateCodexProcess();
+      return;
+    }
+
+    capturedOutputBytes += chunkBytes;
+
+    if (streamName === "stdout") {
+      stdout += data.toString();
+    } else {
+      stderr += data.toString();
+    }
+  }
 
   child.stdout.on("data", (data) => {
-    stdout += data.toString();
+    captureCodexOutput("stdout", data);
   });
 
   child.stderr.on("data", (data) => {
-    stderr += data.toString();
+    captureCodexOutput("stderr", data);
   });
 
-  const timeout = setTimeout(() => {
-    child.kill("SIGTERM");
-  }, 120_000);
+  timeoutId = setTimeout(() => {
+    console.error(`Codex timed out after ${CODEX_TIMEOUT_MS}ms`);
+    sendResponseOnce(504, { error: "Codex request timed out" });
+    terminateCodexProcess();
+  }, CODEX_TIMEOUT_MS);
 
   child.on("error", (err) => {
-    clearTimeout(timeout);
-
-    console.error("Codex process error:", err);
-
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: "Failed to start Codex",
-      });
-    }
+    console.error("Codex process error:", err.message);
+    sendResponseOnce(500, { error: "Failed to start Codex" });
   });
 
   child.on("close", (code) => {
-    clearTimeout(timeout);
-
-    console.log("CODEX EXIT:", code);
-
-    if (code !== 0) {
-      return res.status(500).json({
-        error:
-          stderr.trim() ||
-          `Codex exited with code ${code}`,
-      });
+    if (hasResponded) {
+      return;
     }
 
-    res.json({
+    console.log(`Codex exited with code ${code}`);
+
+    if (code !== 0) {
+      console.error(`Codex stderr captured (${Buffer.byteLength(stderr)} bytes)`);
+      sendResponseOnce(500, { error: "Codex could not complete the request" });
+      return;
+    }
+
+    sendResponseOnce(200, {
       success: true,
       output: stdout.trim(),
     });
