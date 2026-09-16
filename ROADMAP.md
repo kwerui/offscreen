@@ -122,7 +122,7 @@ redesign.
 **Priority: BEFORE SUBMISSION only if Phases 1–4 are stable; otherwise LATER.
 Depends on Phase 2.**
 
-`public/index.html` currently contains too many responsibilities. Gradually
+`public/app.js` currently contains too many responsibilities. Gradually
 separate the current browser code into native ES modules without introducing
 React, a bundler, or a state-management library:
 
@@ -134,9 +134,9 @@ React, a bundler, or a state-management library:
 - individual browser tool handlers.
 
 For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
-`voice-session.js`, `tools.js`, and a small `app.js` entry point. `styles.css`
-now exists; make one extract at a time and verify the full voice flow
-after each extract.
+`voice-session.js`, `tools.js`, and the existing `app.js` entry point.
+`styles.css` and `app.js` now exist; make one extract at a time and verify
+the full voice flow after each extract.
 
 ## Phase 6 — Planned product work
 

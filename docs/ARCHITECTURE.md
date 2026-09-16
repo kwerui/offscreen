@@ -22,7 +22,9 @@ calendar.js               Google Calendar authentication and queries
 calendar-query.js         Deterministic Calendar query interpretation
 test/calendar-query.test.js  Node tests for Calendar query interpretation
 public/
-  index.html              Browser UI and nearly all browser application logic
+  index.html              Browser UI markup
+  styles.css              Page styles
+  app.js                  Browser application logic
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
 offscreen.zip             Tracked release/archive artifact
@@ -55,21 +57,18 @@ records into the smaller object returned to the browser.
 It uses the read-only Google Calendar scope. Google credentials remain on the
 server/local machine and are not sent to the browser.
 
-### `public/index.html`
+### `public/index.html`, `public/styles.css`, and `public/app.js`
 
-`index.html` is currently both the web page and the browser application. It
-contains:
+`index.html` contains the page markup and configuration controls.
+`styles.css` contains the page styles.
 
-- page markup and CSS;
-- configuration controls for voice, greeting, and system prompt;
-- AssemblyAI WebSocket connection setup and event handling;
-- microphone permission, AudioContext, and PCM upload setup;
-- synthesized PCM playback scheduling;
-- transcript and status rendering;
-- AssemblyAI tool definitions;
+`app.js` contains:
+
+- DOM references and UI rendering;
+- AssemblyAI WebSocket/session lifecycle;
+- microphone and playback handling;
 - browser-side website, Calendar, and Codex tool handling;
-- asynchronous tool-result queues and connection lifecycle state, including
-  `sessionId` and `toolTurnId` isolation.
+- asynchronous tool-result queues and turn coordination.
 
 This works as a compact prototype, but it is the main concentration of
 responsibility in the repository.
@@ -185,7 +184,7 @@ code.
 
 These are audit findings, not evidence that every path currently fails.
 
-- `index.html` combines many unrelated jobs, making future changes difficult to
+- `app.js` combines many unrelated jobs, making future changes difficult to
   understand and test.
 - Each voice connection has a monotonically increasing session ID. Disconnect
   invalidates that ID before closing the socket and releasing microphone/audio
@@ -225,9 +224,9 @@ server.js                         application assembly and static hosting
   codex-runner.js                 proposed bounded Codex process runner
 
 public/
-  index.html                      proposed static markup and module entry point
-  styles.css                      proposed page styles
-  app.js                          proposed browser orchestration
+  index.html                      existing static markup
+  styles.css                      existing page styles
+  app.js                          existing browser orchestration entry point
   voice-session.js                proposed AssemblyAI session lifecycle
   audio.js                        proposed microphone and playback logic
   tools.js                        proposed tool definitions and execution

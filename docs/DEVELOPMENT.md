@@ -136,7 +136,7 @@ after their session or turn becomes stale are ignored.
 ## Adding a browser-side tool
 
 The current implementation keeps tool definitions and execution in
-`public/index.html`. Until the proposed frontend split exists, make a small,
+`public/app.js`. Until the proposed frontend split exists, make a small,
 careful change in that file:
 
 1. Decide whether the action is truly browser-only. Opening an allowlisted site
