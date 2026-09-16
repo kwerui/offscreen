@@ -135,21 +135,20 @@ after their session or turn becomes stale are ignored.
 
 ## Adding a browser-side tool
 
-The current implementation keeps tool definitions and execution in
-`public/app.js`. Until the proposed frontend split exists, make a small,
-careful change in that file:
+Static AssemblyAI tool definitions live in `public/tools.js`. Browser-side tool
+execution currently remains in `public/app.js`.
 
-1. Decide whether the action is truly browser-only. Opening an allowlisted site
-   is browser-only; accessing credentials or an external private API is not.
-2. Add a precise tool definition to the `session.update` tools list: name,
-   description, parameters, required fields, and timeout.
-3. Add a matching branch in `handleToolCall`.
+When adding a tool:
+
+1. Add its static definition to `public/tools.js`.
+2. Decide whether the action is truly browser-only.
+3. Add the matching execution branch in `handleToolCall` in `public/app.js`.
 4. Validate tool arguments before acting.
-5. Push an explicit success or failure object with the incoming `call_id`.
-6. Preserve session/turn isolation. If the new tool is interactive and can be
+5. Return an explicit success or failure result with the incoming `call_id`.
+6. Preserve session/turn isolation. If the tool is interactive and can be
    superseded, define how its original `call_id` is resolved.
-7. Update the system prompt only when the agent needs routing instructions.
-8. Manually verify success, unsupported/invalid input, and a tool failure.
+7. Update the system prompt only when routing instructions are required.
+8. Manually verify success, invalid input, and failure behavior.
 
 Keep the browser allowlist explicit. Do not turn a spoken site name into an
 arbitrary URL without a deliberate security design.

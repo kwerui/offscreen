@@ -74,6 +74,9 @@ Current structure:
 - `public/pcm-processor.js`
   - microphone PCM audio processing
 
+- `public/tools.js`
+  - static AssemblyAI tool definitions
+
 Do not move backend credentials or Google API logic into the browser.
 
 If a feature grows substantially, prefer extracting it into a dedicated module instead of making `server.js` or `index.html` indefinitely larger.

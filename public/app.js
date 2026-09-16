@@ -19,6 +19,7 @@ import {
   startMicrophoneCapture,
   tearDownAudio,
 } from "./audio.js";
+import { VOICE_TOOLS } from "./tools.js";
 
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
@@ -260,99 +261,7 @@ import {
                     voiceAgentSettings.voice,
                 },
 
-                tools: [
-                  {
-                    type: "function",
-
-                    name:
-                      "open_website",
-
-                    description:
-                      "Open one of the supported websites in the user's browser.",
-
-                    parameters: {
-                      type: "object",
-
-                      properties: {
-                        site: {
-                          type:
-                            "string",
-
-                          enum: [
-                            "github",
-                            "youtube",
-                            "assemblyai",
-                            "gmail",
-                            "calendar",
-                          ],
-
-                          description:
-                            "The supported website to open.",
-                        },
-                      },
-
-                      required: [
-                        "site",
-                      ],
-                    },
-                  },
-
-{
-  type: "function",
-  name: "get_calendar_events",
-description:
-  "Check the user's real Google Calendar. ALWAYS call this for ANY question " +
-  "about the user's schedule, events, commitments, availability, being free " +
-  "or busy, or any named date/day. Dates may use numeric or spoken ordinals, " +
-  "for example '2nd of December', 'second of December', 'December 2nd', " +
-  "'28th', 'twenty-ninth', or 'Friday'.",
-  parameters: {
-    type: "object",
-    properties: {
-      when: {
-        type: "string",
-description:
-  "The requested time period or date, for example upcoming, today, tomorrow, this month, September 23rd, 23rd of September, December 1st, 1st of December, 28th, or Friday.",
-      },
-    },
-    required: ["when"],
-  },
-
-  execution_mode: "hold",
-  timeout_seconds: 15,
-},
-
-{
-  type: "function",
-
-  name: "ask_codex",
-
-  description:
-    "Use Codex to inspect the user's local software project. " +
-    "Call this immediately whenever the user explicitly asks Codex " +
-    "to inspect, review, debug, explain, or analyze the project or its code. " +
-    "Do not ask for confirmation when the request is understandable.",
-
-  parameters: {
-    type: "object",
-
-    properties: {
-      task: {
-        type: "string",
-
-        description:
-          "The complete request to send to Codex. " +
-          "Preserve the user's actual request as closely as possible.",
-      },
-    },
-
-    required: ["task"],
-  },
-
-  execution_mode: "interactive",
-  timeout_seconds: 45,
-}
-                ],
+                tools: VOICE_TOOLS,
               },
             })
           );

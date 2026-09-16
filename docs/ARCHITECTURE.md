@@ -236,7 +236,7 @@ public/
   app.js                          existing browser orchestration entry point
   voice-session.js                proposed AssemblyAI session lifecycle
   audio.js                        existing microphone and playback logic
-  tools.js                        proposed tool definitions and execution
+  tools.js                        existing static AssemblyAI tool definitions
   ui.js                             existing transcript / status rendering
   pcm-processor.js                existing AudioWorklet
 ```
@@ -258,7 +258,7 @@ tests and manual verification protect the current behavior.
 | `app.js` | Coordinate UI actions and one active voice session. |
 | `voice-session.js` | Own WebSocket messages, session generation, turn coordination, and stale-event protection. |
 | `audio.js` | Capture microphone audio, encode PCM for delivery, schedule playback, stop, and clean up audio. |
-| `tools.js` | Define supported tools and return a normalized tool result. |
+| `tools.js` | Export static AssemblyAI tool definitions. |
 | `ui.js` | Update status and transcript DOM elements. |
 | `styles.css` | Hold the page styles. |
 
