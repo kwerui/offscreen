@@ -191,8 +191,6 @@ These are audit findings, not evidence that every path currently fails.
   voice tool's 45-second timeout. It also limits task and captured-output size
   and uses one response guard so timeout, process error, and close events do
   not send competing HTTP responses.
-- `calendar.js` duplicates Calendar client/timezone/event-formatting work in
-  its two exported functions.
 - Calendar parsing is isolated and covered by Node tests, including fixed
   timezone-boundary cases. Real Google Calendar access still needs manual
   integration verification.

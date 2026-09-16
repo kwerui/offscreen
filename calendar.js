@@ -26,13 +26,16 @@ async function getAuthClient() {
   return authClient;
 }
 
-export async function getPrimaryCalendarTimezone() {
+async function getAuthenticatedCalendar() {
   const auth = await getAuthClient();
-  const calendar = google.calendar({
+
+  return google.calendar({
     version: "v3",
     auth,
   });
+}
 
+async function getCalendarTimezone(calendar) {
   const calendarInfo = await calendar.calendars.get({
     calendarId: "primary",
   });
@@ -40,20 +43,53 @@ export async function getPrimaryCalendarTimezone() {
   return calendarInfo.data.timeZone || "UTC";
 }
 
-export async function getCalendarEvents(range = "upcoming") {
-  const auth = await getAuthClient();
+async function getPrimaryCalendarContext() {
+  const calendar = await getAuthenticatedCalendar();
+  const timezone = await getCalendarTimezone(calendar);
 
-  const calendar = google.calendar({
-    version: "v3",
-    auth,
-  });
+  return { calendar, timezone };
+}
 
-  // Use the timezone configured on the user's primary Google Calendar.
-  const calendarInfo = await calendar.calendars.get({
+async function listCalendarEvents(calendar, start, end, maxResults) {
+  const response = await calendar.events.list({
     calendarId: "primary",
+    timeMin: start.toUTC().toISO(),
+    ...(end && {
+      timeMax: end.toUTC().toISO(),
+    }),
+    ...(maxResults && {
+      maxResults,
+    }),
+    singleEvents: true,
+    orderBy: "startTime",
   });
 
-  const timezone = calendarInfo.data.timeZone || "UTC";
+  return formatCalendarEvents(response.data.items || []);
+}
+
+function formatCalendarEvents(calendarEvents) {
+  return calendarEvents.map((event) => ({
+    title: event.summary || "Untitled event",
+    start:
+      event.start?.dateTime ??
+      event.start?.date ??
+      null,
+    end:
+      event.end?.dateTime ??
+      event.end?.date ??
+      null,
+  }));
+}
+
+export async function getPrimaryCalendarTimezone() {
+  const { timezone } = await getPrimaryCalendarContext();
+
+  return timezone;
+}
+
+export async function getCalendarEvents(range = "upcoming") {
+  const { calendar, timezone } = await getPrimaryCalendarContext();
+
   const now = DateTime.now().setZone(timezone);
 
   let start;
@@ -99,45 +135,19 @@ export async function getCalendarEvents(range = "upcoming") {
       break;
   }
 
-  const response = await calendar.events.list({
-    calendarId: "primary",
-    timeMin: start.toUTC().toISO(),
-    ...(end && {
-      timeMax: end.toUTC().toISO(),
-    }),
-    ...(maxResults && {
-      maxResults,
-    }),
-    singleEvents: true,
-    orderBy: "startTime",
-  });
+  const events = await listCalendarEvents(calendar, start, end, maxResults);
 
   return {
     range,
     timezone,
-    events: (response.data.items || []).map((event) => ({
-      title: event.summary || "Untitled event",
-      start:
-        event.start?.dateTime ??
-        event.start?.date ??
-        null,
-      end:
-        event.end?.dateTime ??
-        event.end?.date ??
-        null,
-    })),
+    events,
   };
 }
 
 export async function getCalendarEventsForDate(date, calendarTimezone) {
-  const auth = await getAuthClient();
+  const calendar = await getAuthenticatedCalendar();
 
-  const calendar = google.calendar({
-    version: "v3",
-    auth,
-  });
-
-  const timezone = calendarTimezone || (await getPrimaryCalendarTimezone());
+  const timezone = calendarTimezone || (await getCalendarTimezone(calendar));
 
   const day = DateTime.fromISO(date, {
     zone: timezone,
@@ -147,27 +157,15 @@ export async function getCalendarEventsForDate(date, calendarTimezone) {
     throw new Error("Invalid date");
   }
 
-  const response = await calendar.events.list({
-    calendarId: "primary",
-    timeMin: day.startOf("day").toUTC().toISO(),
-    timeMax: day.endOf("day").toUTC().toISO(),
-    singleEvents: true,
-    orderBy: "startTime",
-  });
+  const events = await listCalendarEvents(
+    calendar,
+    day.startOf("day"),
+    day.endOf("day")
+  );
 
   return {
     date,
     timezone,
-    events: (response.data.items || []).map((event) => ({
-      title: event.summary || "Untitled event",
-      start:
-        event.start?.dateTime ??
-        event.start?.date ??
-        null,
-      end:
-        event.end?.dateTime ??
-        event.end?.date ??
-        null,
-    })),
+    events,
   };
 }
