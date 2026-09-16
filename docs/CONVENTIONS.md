@@ -229,8 +229,9 @@ Test behavior, not implementation details.
 - Do not remove a failing test just to get green output; understand and repair
   the behavior or explain why it is intentionally deferred.
 
-The project does **not** currently have a working automated test command. Add
-one before relying on test claims in future changes.
+Run `npm test` to use Node's built-in test runner. The current suite covers
+deterministic Calendar parsing and timezone behavior; it does not replace
+manual integration checks.
 
 ## Git discipline
 

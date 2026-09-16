@@ -59,6 +59,10 @@ process is written down.
 **Priority: NOW. Depends on Phase 1 tests for any extracted deterministic
 logic.**
 
+**Status: Complete.** Voice connection lifecycle protection, stale-session
+protection, tool-result isolation across finalized user turns, and bounded
+Codex timeout/output handling are implemented.
+
 Improve the existing browser session without changing its product behavior:
 
 - Make connection lifecycle and teardown reliable for token failures,
@@ -80,6 +84,10 @@ where practical.
 ## Phase 3 — Calendar cleanup
 
 **Priority: BEFORE SUBMISSION. Depends on Phase 1.**
+
+**Status: Complete.** Calendar timezone correctness and the focused Calendar
+cleanup are implemented, including deterministic parsing tests for supported
+ranges, natural-language dates, ordinals, and timezone-sensitive cases.
 
 - Extend the existing deterministic `calendar-query.js` tests as Calendar
   behavior changes; do not move parsing back into an Express route.
