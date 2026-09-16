@@ -135,8 +135,9 @@ React, a bundler, or a state-management library:
 
 For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
 `voice-session.js`, `tools.js`, and the existing `app.js` entry point.
-`styles.css`, `ui.js`, `audio.js`, `tools.js`, and `app.js` now exist. Tool
-definitions are in `tools.js`; tool execution remains in `app.js`. Make one
+`styles.css`, `ui.js`, `audio.js`, `tools.js`, `website-tool.js`, and `app.js`
+now exist. Tool definitions are in `tools.js`; supported website execution is
+in `website-tool.js`; Calendar and Codex execution remain in `app.js`. Make one
 extract at a time and verify the full voice flow after each extract.
 
 ## Phase 6 — Planned product work

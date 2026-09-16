@@ -77,6 +77,9 @@ Current structure:
 - `public/tools.js`
   - static AssemblyAI tool definitions
 
+- `public/website-tool.js`
+  - supported website lookup and opening
+
 Do not move backend credentials or Google API logic into the browser.
 
 If a feature grows substantially, prefer extracting it into a dedicated module instead of making `server.js` or `index.html` indefinitely larger.

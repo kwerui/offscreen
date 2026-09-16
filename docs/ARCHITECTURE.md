@@ -58,27 +58,31 @@ records into the smaller object returned to the browser.
 It uses the read-only Google Calendar scope. Google credentials remain on the
 server/local machine and are not sent to the browser.
 
-### `public/index.html`, `public/styles.css`, and `public/app.js`, `public/ui.js`
+### Browser frontend
 
 ### Frontend files
 
-`index.html` contains the page markup and configuration controls.
-`styles.css` contains the page styles.
+`index.html` contains page markup and configuration controls.
 
-`ui.js` owns DOM lookup and presentation concerns, including status updates,
-transcript rendering, partial user transcript state, control bindings, and
-tool-status bubbles.
+`styles.css` contains page styles.
+
+`ui.js` owns DOM lookup and presentation, including status, transcript
+rendering, partial user transcript state, control bindings, and tool-status
+bubbles.
+
+`audio.js` owns microphone capture, AudioWorklet setup, PCM encoding and
+playback, interruption, and audio cleanup.
+
+`tools.js` exports the static AssemblyAI tool definitions.
+
+`website-tool.js` owns supported-site lookup and opening allowlisted URLs in a
+new browser tab.
 
 `app.js` contains:
-
-- DOM references and UI rendering;
 - AssemblyAI WebSocket/session lifecycle;
-- microphone and playback handling;
-- browser-side website, Calendar, and Codex tool handling;
+- browser-side Calendar and Codex tool execution;
+- website tool-result coordination;
 - asynchronous tool-result queues and turn coordination.
-
-This works as a compact prototype, but it is the main concentration of
-responsibility in the repository.
 
 ### `public/pcm-processor.js`
 
@@ -237,8 +241,9 @@ public/
   voice-session.js                proposed AssemblyAI session lifecycle
   audio.js                        existing microphone and playback logic
   tools.js                        existing static AssemblyAI tool definitions
-  ui.js                             existing transcript / status rendering
+  ui.js                           existing transcript / status rendering
   pcm-processor.js                existing AudioWorklet
+  website-tool.js                 existing supported website execution
 ```
 
 Do not create all these modules at once. Extract one responsibility only when

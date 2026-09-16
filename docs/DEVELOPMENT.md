@@ -135,14 +135,18 @@ after their session or turn becomes stale are ignored.
 
 ## Adding a browser-side tool
 
-Static AssemblyAI tool definitions live in `public/tools.js`. Browser-side tool
-execution currently remains in `public/app.js`.
+Static AssemblyAI tool definitions live in `public/tools.js`. Supported website
+execution lives in `public/website-tool.js`; `public/app.js` continues to
+receive tool calls, coordinate their results, and execute the Calendar and
+Codex branches.
 
 When adding a tool:
 
 1. Add its static definition to `public/tools.js`.
 2. Decide whether the action is truly browser-only.
-3. Add the matching execution branch in `handleToolCall` in `public/app.js`.
+3. Put browser-only action logic in a focused module, and keep the matching
+   `handleToolCall` branch in `public/app.js` responsible for passing its
+   result to `addToolResult`.
 4. Validate tool arguments before acting.
 5. Return an explicit success or failure result with the incoming `call_id`.
 6. Preserve session/turn isolation. If the tool is interactive and can be

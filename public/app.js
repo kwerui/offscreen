@@ -20,17 +20,10 @@ import {
   tearDownAudio,
 } from "./audio.js";
 import { VOICE_TOOLS } from "./tools.js";
+import { openWebsite } from "./website-tool.js";
 
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
-
-      const SITE_URLS = {
-        github: "https://github.com",
-        youtube: "https://youtube.com",
-        assemblyai: "https://www.assemblyai.com/docs",
-        gmail: "https://mail.google.com",
-        calendar: "https://calendar.google.com",
-      };
 
       let ws = null;
       let activeSessionId = 0;
@@ -460,50 +453,9 @@ import { VOICE_TOOLS } from "./tools.js";
           event.name ===
           "open_website"
         ) {
-          const site =
-            event.arguments?.site;
+          const result = openWebsite(event.arguments?.site);
 
-          const url =
-            SITE_URLS[site];
-
-          if (!url) {
-            addToolResult(sessionId, toolTurnId, event.call_id, {
-              success: false,
-              error: `Unsupported website: ${site}`,
-            });
-
-            return;
-          }
-
-          try {
-            console.log(
-              `Opening ${site}:`,
-              url
-            );
-
-            const openedWindow =
-              window.open(
-                url,
-                "_blank"
-              );
-
-            if (!openedWindow) {
-              throw new Error(
-                "The browser blocked the new tab."
-              );
-            }
-
-            addToolResult(sessionId, toolTurnId, event.call_id, {
-              success: true,
-              site,
-              url,
-            });
-          } catch (err) {
-            addToolResult(sessionId, toolTurnId, event.call_id, {
-              success: false,
-              error: err.message,
-            });
-          }
+          addToolResult(sessionId, toolTurnId, event.call_id, result);
 
           return;
         }
