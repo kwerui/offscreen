@@ -83,6 +83,9 @@ Current structure:
 - `public/calendar-tool.js`
   - browser-side Calendar HTTP execution
 
+- `public/codex-tool.js`
+  - browser-side Codex HTTP execution
+
 Do not move backend credentials or Google API logic into the browser.
 
 If a feature grows substantially, prefer extracting it into a dedicated module instead of making `server.js` or `index.html` indefinitely larger.

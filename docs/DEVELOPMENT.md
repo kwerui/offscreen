@@ -136,9 +136,13 @@ after their session or turn becomes stale are ignored.
 ## Adding a browser-side tool
 
 Static AssemblyAI tool definitions live in `public/tools.js`. Supported website
-execution lives in `public/website-tool.js`, and Calendar HTTP execution lives
-in `public/calendar-tool.js`. `public/app.js` continues to receive tool calls,
-coordinate their results, identify Calendar calls, and execute the Codex branch.
+execution lives in `public/website-tool.js`, Calendar HTTP execution lives in
+`public/calendar-tool.js`, and Codex HTTP execution lives in
+`public/codex-tool.js`.
+
+`public/app.js` continues to receive tool calls and coordinate their results,
+including Codex interactive-call tracking, supersession/cancellation, and
+session/turn protection.
 
 When adding a tool:
 

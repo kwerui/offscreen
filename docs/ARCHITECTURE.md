@@ -22,11 +22,16 @@ calendar.js               Google Calendar authentication and queries
 calendar-query.js         Deterministic Calendar query interpretation
 test/calendar-query.test.js  Node tests for Calendar query interpretation
 test/calendar-tool.test.js   Node tests for Calendar HTTP execution
+test/codex-tool.test.js      Node tests for Codex HTTP execution
 public/
   index.html              Browser UI markup
   styles.css              Page styles
-  app.js                  Browser application logic
-  calendar-tool.js        Browser Calendar HTTP execution
+  app.js                  Browser orchestration and tool coordination
+  audio.js                Microphone capture and PCM playback
+  tools.js                Static AssemblyAI tool definitions
+  website-tool.js         Supported website execution
+  calendar-tool.js        Calendar HTTP execution
+  codex-tool.js           Codex HTTP execution
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
@@ -84,10 +89,16 @@ new browser tab.
 local Calendar endpoint and returns its existing success or failure tool-result
 data. It does not coordinate AssemblyAI sessions, tool turns, or results.
 
+`codex-tool.js` owns browser-side Codex HTTP execution: it validates a task,
+calls the local Codex endpoint, and returns its existing success or failure
+tool-result data. It does not know about AssemblyAI events, interactive-call
+tracking, supersession/cancellation, sessions, tool turns, or result queues.
+
 `app.js` contains:
 - AssemblyAI WebSocket/session lifecycle;
 - Calendar tool-call identification and result coordination;
-- browser-side Codex tool execution;
+- Codex tool-call identification, interactive-call tracking,
+  supersession/cancellation, session/turn checks, and result coordination;
 - website tool-result coordination;
 - asynchronous tool-result queues and turn coordination.
 
@@ -180,9 +191,13 @@ Calendar tool-result shape, while `app.js` coordinates its AssemblyAI result.
 
 ### Codex flow
 
-The `ask_codex` browser tool sends its task to `POST /api/codex`. The server
-starts `codex exec` with a read-only sandbox and returns its stdout as the tool
-result. This is intended for a trusted, local development/demo environment.
+The `ask_codex` browser tool is identified and coordinated by `app.js`.
+`codex-tool.js` sends its task to `POST /api/codex` and returns the existing
+tool-result shape. `app.js` retains interactive call tracking,
+supersession/cancellation, session/turn checks, and generic result
+coordination. The server starts `codex exec` with a read-only sandbox and
+returns its stdout as the tool result. This is intended for a trusted, local
+development/demo environment.
 
 ## Current frontend/backend boundary
 

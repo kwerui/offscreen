@@ -137,9 +137,9 @@ For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
 `voice-session.js`, `tools.js`, and the existing `app.js` entry point.
 `styles.css`, `ui.js`, `audio.js`, `tools.js`, `website-tool.js`, and `app.js`
 now exist. Tool definitions are in `tools.js`; supported website execution is in
-`website-tool.js`; Calendar execution is in `calendar-tool.js`; Codex
-execution and generic tool-result coordination remain in `app.js`. Make one
-extract at a time and verify the full voice flow after each extract.
+`website-tool.js`; Calendar execution is in `calendar-tool.js`; Codex HTTP
+execution is in `codex-tool.js`. Generic tool-result coordination and Codex
+interactive-call tracking/supersession remain in `app.js`.
 
 ## Phase 6 — Planned product work
 

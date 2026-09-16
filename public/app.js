@@ -22,6 +22,7 @@ import {
 import { VOICE_TOOLS } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
+import { runCodexTask } from "./codex-tool.js";
 
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
@@ -483,55 +484,21 @@ if (event.name === "ask_codex") {
     callId: event.call_id,
   });
 
-  try {
-    const task = event.arguments?.task;
+  const task = event.arguments?.task;
 
-    if (!task) {
-      throw new Error("Codex task is required.");
-    }
-
-    console.log("Codex tool started");
-
+  if (task) {
     showToolStatus(
   "Codex is checking your project…",
   sessionId,
   toolTurnId,
   isActiveToolTurn
 );
-
-    const response = await fetch("/api/codex", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ task }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-
-throw new Error(
-  `Codex request failed with status ${response.status}: ${errorText}`
-);
-    }
-
-    const data = await response.json();
-    clearToolStatus(sessionId, toolTurnId);
-    console.log("Codex tool completed");
-
-    addToolResult(sessionId, toolTurnId, event.call_id, {
-      success: true,
-      output: data.output,
-    });
-  } catch (err) {
-    clearToolStatus(sessionId, toolTurnId);
-    console.error("Codex tool failed");
-
-    addToolResult(sessionId, toolTurnId, event.call_id, {
-      success: false,
-      error: err.message,
-    });
   }
+
+  const result = await runCodexTask(task);
+  clearToolStatus(sessionId, toolTurnId);
+
+  addToolResult(sessionId, toolTurnId, event.call_id, result);
 
   return;
 }
