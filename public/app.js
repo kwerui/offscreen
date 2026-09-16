@@ -25,11 +25,8 @@ import { getCalendarEvents } from "./calendar-tool.js";
 import { runCodexTask } from "./codex-tool.js";
 import { createCodexCallTracker } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
+import { createVoiceSession } from "./voice-session.js";
 
-      const WS_URL =
-        "wss://agents.assemblyai.com/v1/ws";
-
-      let ws = null;
       let activeSessionId = 0;
 
       let activeToolTurnId = 0;
@@ -44,6 +41,8 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
           toolTurnId === activeToolTurnId
         );
       }
+
+      const voiceSession = createVoiceSession();
 
       const codexCallTracker = createCodexCallTracker({
         sendCancellationResult: (sessionId, toolTurnId, callId, result) => {
@@ -66,8 +65,7 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
         isCurrent: isActiveToolTurn,
         canSendResults: (sessionId, toolTurnId) => (
           isActiveToolTurn(sessionId, toolTurnId) &&
-          ws &&
-          ws.readyState === WebSocket.OPEN
+          voiceSession.isOpen()
         ),
         sendToolResult: (sessionId, toolTurnId, callId, result) => {
           const wasSent = sendToolResult(
@@ -99,27 +97,10 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
         teardown(statusState, statusText);
       }
 
-      async function fetchToken() {
-        const response =
-          await fetch("/api/voice-token");
-
-        if (!response.ok) {
-          throw new Error(
-            "Failed to fetch token: " +
-              response.status
-          );
-        }
-
-        const { token } =
-          await response.json();
-
-        return token;
-      }
-
       async function connect() {
         const sessionId = activeSessionId + 1;
 
-        if (ws || hasAudioResources()) {
+        if (voiceSession.hasConnection() || hasAudioResources()) {
           activeSessionId = sessionId;
           teardown();
         } else {
@@ -133,186 +114,140 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
           "Requesting token…"
         );
 
-        let token;
-
-        let connectionSocket;
-
         try {
-          token = await fetchToken();
-        } catch {
-          if (!isActiveSession(sessionId)) {
-            return;
-          }
+          await voiceSession.connect({
+            prepareConnection: async () => {
+              try {
+                const audioWasSetUp = await setUpAudio({
+                  isSessionActive: () => isActiveSession(sessionId),
+                  onMicrophoneAudio: (audio) => {
+                    if (!isActiveSession(sessionId)) {
+                      return;
+                    }
 
-          console.error("Token request failed");
+                    voiceSession.send({
+                      type: "input.audio",
+                      audio,
+                    });
+                  },
+                });
 
-          endActiveSession("error", "Token error");
+                if (!audioWasSetUp) {
+                  return false;
+                }
+              } catch (err) {
+                if (!isActiveSession(sessionId)) {
+                  return false;
+                }
 
-          return;
-        }
+                if (err.stage === "microphone") {
+                  console.error("Mic permission denied:", err.cause);
+                  endActiveSession("error", "Mic blocked");
+                } else {
+                  console.error("Audio setup error:", err.cause);
+                  endActiveSession("error", "Audio setup error");
+                }
 
-        if (!isActiveSession(sessionId)) {
-          return;
-        }
+                return false;
+              }
 
-        try {
-          const audioWasSetUp = await setUpAudio({
-            isSessionActive: () => isActiveSession(sessionId),
-            onMicrophoneAudio: (audio) => {
-              if (
-                ws !== connectionSocket ||
-                connectionSocket.readyState !== WebSocket.OPEN
-              ) {
+              setStatus(
+                "connecting",
+                "Connecting…"
+              );
+
+              return true;
+            },
+            onOpen: () => {
+              if (!isActiveSession(sessionId)) {
                 return;
               }
 
-              connectionSocket.send(
-                JSON.stringify({
-                  type: "input.audio",
-                  audio,
-                })
+              const now = new Date();
+
+              const today = [
+                now.getFullYear(),
+                String(
+                  now.getMonth() + 1
+                ).padStart(2, "0"),
+                String(
+                  now.getDate()
+                ).padStart(2, "0"),
+              ].join("-");
+
+              const voiceAgentSettings = getVoiceAgentSettings();
+
+              voiceSession.send({
+                type: "session.update",
+
+                session: {
+                  system_prompt:
+                    voiceAgentSettings.prompt +
+                    `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
+
+                  greeting:
+                    voiceAgentSettings.greeting,
+
+                  input: {
+                    turn_detection: {
+                      vad_threshold: 0.5,
+                      min_silence: 1000,
+                      max_silence: 3000,
+                      interrupt_response: true,
+                    },
+                  },
+
+                  output: {
+                    voice:
+                      voiceAgentSettings.voice,
+                  },
+
+                  tools: VOICE_TOOLS,
+                },
+              });
+            },
+            onEvent: (event) => handleEvent(event, sessionId),
+            onError: (err) => {
+              if (!isActiveSession(sessionId)) {
+                return;
+              }
+
+              console.error(
+                "WebSocket error:",
+                err
+              );
+
+              endActiveSession(
+                "error",
+                "Connection error"
               );
             },
+            onClose: (event) => {
+              if (!isActiveSession(sessionId)) {
+                return;
+              }
+
+              console.log(
+                "WebSocket closed:",
+                event.code
+              );
+
+              endActiveSession();
+            },
           });
-
-          if (!audioWasSetUp) {
-            return;
-          }
         } catch (err) {
           if (!isActiveSession(sessionId)) {
             return;
           }
 
-          if (err.stage === "microphone") {
-            console.error("Mic permission denied:", err.cause);
-            endActiveSession("error", "Mic blocked");
+          if (err.stage === "token") {
+            console.error("Token request failed");
+            endActiveSession("error", "Token error");
           } else {
-            console.error("Audio setup error:", err.cause);
-            endActiveSession("error", "Audio setup error");
+            console.error("WebSocket setup error:", err);
+            endActiveSession("error", "Connection error");
           }
-
-          return;
         }
-
-        setStatus(
-          "connecting",
-          "Connecting…"
-        );
-
-        try {
-          connectionSocket = new WebSocket(
-            `${WS_URL}?token=${encodeURIComponent(
-              token
-            )}`
-          );
-        } catch (err) {
-          console.error("WebSocket setup error:", err);
-          endActiveSession("error", "Connection error");
-          return;
-        }
-
-        if (!isActiveSession(sessionId)) {
-          closeWebSocket(connectionSocket);
-          return;
-        }
-
-        ws = connectionSocket;
-
-        connectionSocket.binaryType = "arraybuffer";
-
-        connectionSocket.onopen = () => {
-          if (!isActiveSession(sessionId)) {
-            closeWebSocket(connectionSocket);
-            return;
-          }
-
-          const now = new Date();
-
-          const today = [
-            now.getFullYear(),
-            String(
-              now.getMonth() + 1
-            ).padStart(2, "0"),
-            String(
-              now.getDate()
-            ).padStart(2, "0"),
-          ].join("-");
-
-          const voiceAgentSettings = getVoiceAgentSettings();
-
-          connectionSocket.send(
-            JSON.stringify({
-              type: "session.update",
-
-              session: {
-                system_prompt:
-                  voiceAgentSettings.prompt +
-                  `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
-
-                greeting:
-                  voiceAgentSettings.greeting,
-
-                input: {
-  turn_detection: {
-    vad_threshold: 0.5,
-    min_silence: 1000,
-    max_silence: 3000,
-    interrupt_response: true,
-  },
-},
-
-                output: {
-                  voice:
-                    voiceAgentSettings.voice,
-                },
-
-                tools: VOICE_TOOLS,
-              },
-            })
-          );
-        };
-
-        connectionSocket.onmessage = (event) => {
-          if (!isActiveSession(sessionId)) {
-            return;
-          }
-
-          handleEvent(
-            JSON.parse(
-              event.data
-            ),
-            sessionId
-          );
-        };
-
-        connectionSocket.onerror = (err) => {
-          if (!isActiveSession(sessionId)) {
-            return;
-          }
-
-          console.error(
-            "WebSocket error:",
-            err
-          );
-
-          endActiveSession(
-            "error",
-            "Connection error"
-          );
-        };
-
-        connectionSocket.onclose = (event) => {
-          if (!isActiveSession(sessionId)) {
-            return;
-          }
-
-          console.log(
-            "WebSocket closed:",
-            event.code
-          );
-
-          endActiveSession();
-        };
 
       }
 
@@ -527,32 +462,25 @@ toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
       function sendToolResult(sessionId, toolTurnId, callId, result) {
         if (
           !isActiveToolTurn(sessionId, toolTurnId) ||
-          !ws ||
-          ws.readyState !== WebSocket.OPEN
+          !voiceSession.isOpen()
         ) {
           return false;
         }
 
-        ws.send(
-          JSON.stringify({
-            type: "tool.result",
-            call_id: callId,
-            result: JSON.stringify(result),
-          })
-        );
+        voiceSession.send({
+          type: "tool.result",
+          call_id: callId,
+          result: JSON.stringify(result),
+        });
 
         return true;
       }
 
       function teardown(statusState = "", statusText = "Disconnected") {
-        const socket = ws;
-
         invalidateToolTurn();
         codexCallTracker.clear();
 
-        ws = null;
-
-        closeWebSocket(socket);
+        voiceSession.disconnect();
         tearDownAudio();
         resetUserPartialTranscript();
         setStatus(statusState, statusText);
@@ -562,22 +490,6 @@ toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
 
       function disconnect() {
         endActiveSession();
-      }
-
-      function closeWebSocket(socket) {
-        if (
-          !socket ||
-          socket.readyState === WebSocket.CLOSING ||
-          socket.readyState === WebSocket.CLOSED
-        ) {
-          return;
-        }
-
-        try {
-          socket.close();
-        } catch (err) {
-          console.error("WebSocket close error:", err);
-        }
       }
 
       bindControls(connect, disconnect);

@@ -67,9 +67,13 @@ Current structure:
   - audio cleanup
 
 - `public/app.js`
-  - AssemblyAI WebSocket session
   - browser-side tool execution
-  - session and turn coordination
+  - AssemblyAI event semantics
+  - active session and turn coordination
+
+- `public/voice-session.js`
+  - AssemblyAI temporary-token and WebSocket connection lifecycle
+  - raw WebSocket message transport
 
 - `public/pcm-processor.js`
   - microphone PCM audio processing

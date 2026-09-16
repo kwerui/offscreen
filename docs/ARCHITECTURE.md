@@ -26,7 +26,8 @@ test/codex-tool.test.js      Node tests for Codex HTTP execution
 public/
   index.html              Browser UI markup
   styles.css              Page styles
-  app.js                  Browser orchestration, session lifecycle, and tool dispatch
+  app.js                  Browser orchestration, event semantics, and tool dispatch
+  voice-session.js        AssemblyAI transport and connection lifecycle
   codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
   tool-result-coordinator.js  Generic tool-result queue/task coordination
   audio.js                Microphone capture and PCM playback
@@ -84,6 +85,11 @@ playback, interruption, and audio cleanup.
 
 `tools.js` exports the static AssemblyAI tool definitions.
 
+`voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
+creation and closure, raw parsed inbound events, and JSON outbound messages.
+It does not know about UI, tool names, tool turns, active session IDs, or
+event meaning.
+
 `website-tool.js` owns supported-site lookup and opening allowlisted URLs in a
 new browser tab.
 
@@ -107,12 +113,13 @@ receives callbacks from `app.js` to check turn validity and send results; it
 does not own the WebSocket, session lifecycle, a tool implementation, or UI.
 
 `app.js` contains:
-- AssemblyAI WebSocket/session lifecycle;
+- AssemblyAI event semantics and session-update configuration;
+- active session IDs, tool-turn ownership, and stale-session checks;
 - tool-call identification and execution dispatch;
 - Codex tool-call identification, session/turn checks, and the decision to
   supersede an earlier user turn;
 - website and Calendar tool-call identification;
-- the WebSocket send primitive used by normal flushing and explicit Codex
+- tool-result message composition for normal flushing and explicit Codex
   cancellation results.
 
 ### `public/pcm-processor.js`
@@ -307,7 +314,7 @@ tests and manual verification protect the current behavior.
 | `calendar.js` | Authenticate with Google, obtain Calendar context, fetch, and format events. |
 | `codex-runner.js` | Start, time-limit, and normalize the read-only Codex process. |
 | `app.js` | Coordinate UI actions and one active voice session. |
-| `voice-session.js` | Own WebSocket messages, session generation, turn coordination, and stale-event protection. |
+| `voice-session.js` | Own AssemblyAI token fetching, WebSocket connection lifecycle, and raw message transport. |
 | `audio.js` | Capture microphone audio, encode PCM for delivery, schedule playback, stop, and clean up audio. |
 | `tools.js` | Export static AssemblyAI tool definitions. |
 | `ui.js` | Update status and transcript DOM elements. |

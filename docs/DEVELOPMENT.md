@@ -104,9 +104,9 @@ AssemblyAI, Google Calendar, or Codex behavior.
 
 ## Current application flow
 
-1. The browser requests a temporary AssemblyAI token from the local server.
+1. `voice-session.js` requests a temporary AssemblyAI token from the local server.
 2. The server uses its secret AssemblyAI API key to mint the temporary token.
-3. The browser opens an AssemblyAI Voice Agent WebSocket using that token.
+3. `voice-session.js` opens and owns the AssemblyAI Voice Agent WebSocket using that token.
 4. Once the session is ready, the browser sends the selected voice, greeting,
    system prompt, and tool definitions.
 5. The browser captures microphone audio, converts it to PCM through
@@ -156,9 +156,10 @@ execution lives in `public/website-tool.js`, Calendar HTTP execution lives in
 `public/calendar-tool.js`, and Codex HTTP execution lives in
 `public/codex-tool.js`.
 
-`public/app.js` continues to receive tool calls and dispatch execution. It owns
-session/turn protection and decides when a new user turn supersedes an earlier
-one. `public/codex-call-tracker.js` owns Codex interactive-call tracking and
+`public/app.js` continues to receive raw events and dispatch tool execution. It
+owns active session IDs, session/turn protection, and deciding when a new user
+turn supersedes an earlier one. `public/voice-session.js` owns only the
+AssemblyAI connection lifecycle and raw transport. `public/codex-call-tracker.js` owns Codex interactive-call tracking and
 explicit supersession/cancellation. `public/tool-result-coordinator.js`
 coordinates the generic pending-result queue, active tasks, reply-done state,
 and result flushing.
