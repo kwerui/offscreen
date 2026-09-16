@@ -205,8 +205,8 @@ security-sensitive integration, stop and get explicit approval.
   pending result queue.
 - Check whether the voice reply was interrupted; the current implementation
   clears pending results when an interrupted reply is reported.
-- Reconnect and retry if a request was started while disconnecting. The
-  reliability roadmap addresses stale-session behavior more fully.
+- A result that finishes after its voice session disconnects is ignored. After
+  reconnecting, retry the request in the new session.
 
 ### WebSocket problems
 

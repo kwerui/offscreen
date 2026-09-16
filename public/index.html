@@ -348,31 +348,38 @@ If a user asks whether they are free, busy, available, or scheduled at any time 
 Never answer a calendar question without first calling get_calendar_events.
 Never invent calendar information.
 
-CODEX TOOL ROUTING
+CODEX TOOL ROUTING — REQUIRED
 
-If the user says "Codex" or "ask Codex", ALWAYS call ask_codex.
+If the user mentions Codex, says "ask Codex", or asks to inspect, review,
+debug, explain, or analyze this local repository or its code, you MUST call
+ask_codex immediately in the same turn.
 
-If answering the user's question requires inspecting the local project,
-repository, source files, tests, implementation, or architecture,
-ALWAYS call ask_codex.
+Do not ask for confirmation.
+Do not ask what Codex should do if the user's request is already understandable.
+Broad requests such as "do a reliability review" are valid tasks.
+Do not say "I'll ask Codex", "one moment", "should I go ahead?", or otherwise
+respond before calling the tool.
 
-Do not answer repository-specific questions from general knowledge.
-Do not ask the user what they want Codex to do when their request already
-contains a task.
+Pass the user's actual request to ask_codex as the task.
 
 Examples:
 
-"Ask Codex what this project does."
-→ call ask_codex
+User: "Ask Codex what this project does."
+→ immediately call ask_codex
 
-"Which file handles Google Calendar?"
-→ call ask_codex
+User: "Ask Codex for a deep reliability review."
+→ immediately call ask_codex with task = "Perform a deep reliability review."
 
-"Ask Codex to inspect my tests."
-→ call ask_codex
+User: "Ask Codex to inspect the project architecture and identify the most
+important reliability issue."
+→ immediately call ask_codex with that request as the task
 
-"Why might JavaScript promises reject?"
-→ do not call ask_codex unless the user asks about this project's code.
+User: "Go ahead."
+→ if the immediately preceding conversation established a Codex task that has
+not yet been executed, call ask_codex with that task immediately.
+
+Never claim Codex is working unless ask_codex has actually been called.
+After the tool returns, summarize its result briefly.
 </textarea>
         </div>
       </div>
@@ -447,6 +454,7 @@ Examples:
       let toolStatusElement = null;
 let toolStatusTimer = null;
 let toolStatusStartedAt = null;
+let toolStatusSessionId = null;
 
       function setStatus(state, text) {
         els.statusDot.className = "dot " + state;
@@ -715,6 +723,15 @@ let toolStatusStartedAt = null;
                 greeting:
                   els.greeting.value,
 
+                input: {
+  turn_detection: {
+    vad_threshold: 0.5,
+    min_silence: 1000,
+    max_silence: 3000,
+    interrupt_response: true,
+  },
+},
+
                 output: {
                   voice:
                     els.voice.value,
@@ -780,20 +797,31 @@ description:
 
 {
   type: "function",
+
   name: "ask_codex",
+
   description:
-    "MANDATORY tool for accessing the user's local software project through Codex. Call this whenever the user says 'Codex' or 'ask Codex', or asks about the contents, files, code, architecture, tests, bugs, implementation, or structure of the local project. Do not answer repository-specific questions yourself because you do not have direct access to the repository without this tool.",
+    "Use Codex to inspect the user's local software project. " +
+    "Call this immediately whenever the user explicitly asks Codex " +
+    "to inspect, review, debug, explain, or analyze the project or its code. " +
+    "Do not ask for confirmation when the request is understandable.",
+
   parameters: {
     type: "object",
+
     properties: {
       task: {
         type: "string",
+
         description:
-          "A complete standalone instruction for Codex to perform on the local repository. Preserve the user's actual request.",
+          "The complete request to send to Codex. " +
+          "Preserve the user's actual request as closely as possible.",
       },
     },
+
     required: ["task"],
   },
+
   execution_mode: "hold",
   timeout_seconds: 45,
 }
@@ -997,7 +1025,7 @@ description:
           case "tool.call":
             activeToolTasks++;
 
-            handleToolCall(event)
+            handleToolCall(event, sessionId)
               .catch((err) => {
                 console.error(
                   "Tool handler failed:",
@@ -1005,9 +1033,13 @@ description:
                 );
               })
               .finally(() => {
+                if (!isActiveSession(sessionId)) {
+                  return;
+                }
+
                 activeToolTasks--;
 
-                maybeSendToolResults();
+                maybeSendToolResults(sessionId);
               });
 
             break;
@@ -1025,7 +1057,7 @@ description:
             } else {
               toolReplyDone = true;
 
-              maybeSendToolResults();
+              maybeSendToolResults(sessionId);
             }
 
             break;
@@ -1046,7 +1078,8 @@ description:
       }
 
       async function handleToolCall(
-        event
+        event,
+        sessionId
       ) {
         console.log(
           "TOOL CALLED:",
@@ -1069,16 +1102,9 @@ description:
             SITE_URLS[site];
 
           if (!url) {
-            pendingToolResults.push({
-              call_id:
-                event.call_id,
-
-              result: {
-                success: false,
-
-                error:
-                  `Unsupported website: ${site}`,
-              },
+            addToolResult(sessionId, event.call_id, {
+              success: false,
+              error: `Unsupported website: ${site}`,
             });
 
             return;
@@ -1102,27 +1128,15 @@ description:
               );
             }
 
-            pendingToolResults.push({
-              call_id:
-                event.call_id,
-
-              result: {
-                success: true,
-                site,
-                url,
-              },
+            addToolResult(sessionId, event.call_id, {
+              success: true,
+              site,
+              url,
             });
           } catch (err) {
-            pendingToolResults.push({
-              call_id:
-                event.call_id,
-
-              result: {
-                success: false,
-
-                error:
-                  err.message,
-              },
+            addToolResult(sessionId, event.call_id, {
+              success: false,
+              error: err.message,
             });
           }
 
@@ -1162,24 +1176,18 @@ description:
 
     console.log("Calendar result:", data);
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: true,
-        requested_when: when,
-        timezone: data.timezone,
-        events: data.events || [],
-      },
+    addToolResult(sessionId, event.call_id, {
+      success: true,
+      requested_when: when,
+      timezone: data.timezone,
+      events: data.events || [],
     });
   } catch (err) {
     console.error("Calendar tool failed:", err);
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: false,
-        error: err.message,
-      },
+    addToolResult(sessionId, event.call_id, {
+      success: false,
+      error: err.message,
     });
   }
 
@@ -1201,7 +1209,8 @@ if (event.name === "ask_codex") {
     console.log("Codex task:", task);
 
     showToolStatus(
-  "Codex is checking your project…"
+  "Codex is checking your project…",
+  sessionId
 );
 
     const response = await fetch("/api/codex", {
@@ -1222,26 +1231,20 @@ if (event.name === "ask_codex") {
     }
 
     const data = await response.json();
-    clearToolStatus();
+    clearToolStatus(sessionId);
     console.log("Codex result:", data.output);
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: true,
-        output: data.output,
-      },
+    addToolResult(sessionId, event.call_id, {
+      success: true,
+      output: data.output,
     });
   } catch (err) {
-    clearToolStatus();
+    clearToolStatus(sessionId);
     console.error("Codex tool failed:", err);
 
-    pendingToolResults.push({
-      call_id: event.call_id,
-      result: {
-        success: false,
-        error: err.message,
-      },
+    addToolResult(sessionId, event.call_id, {
+      success: false,
+      error: err.message,
     });
   }
 
@@ -1252,18 +1255,30 @@ if (event.name === "ask_codex") {
 // UNKNOWN TOOL
 // ---------------------------------
 
-pendingToolResults.push({
-  call_id: event.call_id,
-  result: {
-    success: false,
-    error: `Unknown tool: ${event.name}`,
-  },
+addToolResult(sessionId, event.call_id, {
+  success: false,
+  error: `Unknown tool: ${event.name}`,
 });
 
       }
 
 
-      function maybeSendToolResults() {
+      function addToolResult(sessionId, callId, result) {
+        if (!isActiveSession(sessionId)) {
+          return;
+        }
+
+        pendingToolResults.push({
+          call_id: callId,
+          result,
+        });
+      }
+
+      function maybeSendToolResults(sessionId) {
+        if (!isActiveSession(sessionId)) {
+          return;
+        }
+
         if (!toolReplyDone) {
           return;
         }
@@ -1286,13 +1301,14 @@ pendingToolResults.push({
           pendingToolResults
         );
 
-        sendPendingToolResults();
+        sendPendingToolResults(sessionId);
 
         toolReplyDone = false;
       }
 
-      function sendPendingToolResults() {
+      function sendPendingToolResults(sessionId) {
         if (
+          !isActiveSession(sessionId) ||
           !ws ||
           ws.readyState !==
             WebSocket.OPEN
@@ -1323,10 +1339,15 @@ pendingToolResults.push({
         pendingToolResults = [];
       }
 
-      function showToolStatus(message) {
+      function showToolStatus(message, sessionId) {
+  if (!isActiveSession(sessionId)) {
+    return;
+  }
+
   clearToolStatus();
 
   toolStatusStartedAt = Date.now();
+  toolStatusSessionId = sessionId;
 
   toolStatusElement = ensureBubble(
     "agent",
@@ -1334,6 +1355,13 @@ pendingToolResults.push({
   );
 
   function updateStatus() {
+    if (
+      !isActiveSession(sessionId) ||
+      toolStatusSessionId !== sessionId
+    ) {
+      return;
+    }
+
     const seconds = Math.floor(
       (Date.now() - toolStatusStartedAt) / 1000
     );
@@ -1350,7 +1378,14 @@ pendingToolResults.push({
   );
 }
 
-function clearToolStatus() {
+function clearToolStatus(sessionId) {
+  if (
+    sessionId !== undefined &&
+    toolStatusSessionId !== sessionId
+  ) {
+    return;
+  }
+
   if (toolStatusTimer) {
     clearInterval(toolStatusTimer);
     toolStatusTimer = null;
@@ -1362,6 +1397,7 @@ function clearToolStatus() {
   }
 
   toolStatusStartedAt = null;
+  toolStatusSessionId = null;
 }
 
       function playPCM(b64, sessionId) {

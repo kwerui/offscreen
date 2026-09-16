@@ -183,8 +183,9 @@ These are audit findings, not evidence that every path currently fails.
 - Each voice connection has a monotonically increasing session ID. Disconnect
   invalidates that ID before closing the socket and releasing microphone/audio
   resources, so callbacks from an older connection are ignored.
-- Tool results use shared asynchronous state, so a late completion can affect a
-  newer voice session after reconnecting.
+- Each tool call captures its originating session ID. Late Calendar or Codex
+  completions are ignored after disconnect/reconnect instead of altering the
+  current session's queue, counters, or tool-status display.
 - The Codex tool declares a shorter voice timeout than the server process
   timeout, which can create late-result behavior.
 - Natural-language dates are parsed in server time while Calendar queries use
