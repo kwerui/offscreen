@@ -348,6 +348,19 @@ If a user asks whether they are free, busy, available, or scheduled at any time 
 Never answer a calendar question without first calling get_calendar_events.
 Never invent calendar information.
 
+Calendar dates may contain spoken ordinal words.
+
+Examples:
+
+User: "What do I have on the second of December?"
+Call get_calendar_events with when = "second of December"
+
+User: "What's on the twenty-ninth?"
+Call get_calendar_events with when = "twenty-ninth"
+
+Treat spoken forms such as first, second, third, twenty-eighth, and
+twenty-ninth as dates just like 1st, 2nd, 3rd, 28th, and 29th.
+
 CODEX TOOL ROUTING — REQUIRED
 
 If the user mentions Codex, says "ask Codex", or asks to inspect, review,
@@ -778,7 +791,11 @@ let toolStatusSessionId = null;
   type: "function",
   name: "get_calendar_events",
 description:
-  "Check the user's real Google Calendar. ALWAYS call this for ANY question about schedule, events, commitments, availability, being free or busy, or any named date/day. Date phrasing may be casual and can be month-first or day-first, such as 'September 23rd', '23rd of September', 'December 1st', '1st of December', '28th', or 'Friday'.",
+  "Check the user's real Google Calendar. ALWAYS call this for ANY question " +
+  "about the user's schedule, events, commitments, availability, being free " +
+  "or busy, or any named date/day. Dates may use numeric or spoken ordinals, " +
+  "for example '2nd of December', 'second of December', 'December 2nd', " +
+  "'28th', 'twenty-ninth', or 'Friday'.",
   parameters: {
     type: "object",
     properties: {
