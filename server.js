@@ -25,6 +25,7 @@ if (!API_KEY) {
 }
 
 const PORT = process.env.PORT || 3000;
+const HOST = "127.0.0.1";
 const TOKEN_TTL_SECONDS = 300; // 1-600
 const CODEX_TIMEOUT_MS = 40_000;
 const MAX_CODEX_TASK_CHARACTERS = 4_000;
@@ -325,6 +326,6 @@ app.post("/api/codex", async (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Voice assistant app running at http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Voice assistant app running at http://${HOST}:${PORT}`);
 });
