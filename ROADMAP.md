@@ -135,8 +135,8 @@ React, a bundler, or a state-management library:
 
 For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
 `voice-session.js`, `tools.js`, and the existing `app.js` entry point.
-`styles.css` and `app.js` now exist; make one extract at a time and verify
-the full voice flow after each extract.
+`styles.css`, `ui.js`, and `app.js` now exist; make one extract at a time and
+verify the full voice flow after each extract.
 
 ## Phase 6 — Planned product work
 

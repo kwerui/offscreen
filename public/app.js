@@ -1,3 +1,17 @@
+import {
+  addBubble,
+  bindControls,
+  clearToolStatus,
+  finalizeUserTranscript,
+  getVoiceAgentSettings,
+  resetUserPartialTranscript,
+  setConnectButtonDisabled,
+  setDisconnectButtonDisabled,
+  setStatus,
+  showToolStatus,
+  updateUserPartialTranscript,
+} from "./ui.js";
+
       const SAMPLE_RATE = 24_000;
       const WS_URL =
         "wss://agents.assemblyai.com/v1/ws";
@@ -10,19 +24,6 @@
         calendar: "https://calendar.google.com",
       };
 
-      const els = {
-        connect: document.getElementById("connect"),
-        disconnect: document.getElementById("disconnect"),
-        clear: document.getElementById("clear"),
-        voice: document.getElementById("voice"),
-        prompt: document.getElementById("prompt"),
-        greeting: document.getElementById("greeting"),
-        transcript: document.getElementById("transcript"),
-        empty: document.getElementById("empty"),
-        statusDot: document.getElementById("status-dot"),
-        statusText: document.getElementById("status-text"),
-      };
-
       let ws = null;
       let audioCtx = null;
       let micStream = null;
@@ -32,24 +33,11 @@
 
       let playbackTime = 0;
       let scheduledSources = [];
-      let userPartialEl = null;
-
       let pendingToolResults = [];
       let activeToolTasks = 0;
       let toolReplyDone = false;
       let activeToolTurnId = 0;
       const unresolvedCodexCalls = new Map();
-
-      let toolStatusElement = null;
-let toolStatusTimer = null;
-let toolStatusStartedAt = null;
-let toolStatusSessionId = null;
-let toolStatusTurnId = null;
-
-      function setStatus(state, text) {
-        els.statusDot.className = "dot " + state;
-        els.statusText.textContent = text;
-      }
 
       function isActiveSession(sessionId) {
         return sessionId === activeSessionId;
@@ -104,50 +92,6 @@ let toolStatusTurnId = null;
         teardown(statusState, statusText);
       }
 
-      function clearTranscript() {
-        els.transcript.innerHTML = "";
-        els.transcript.appendChild(els.empty);
-        userPartialEl = null;
-      }
-
-      function ensureBubble(role, partial = false) {
-        if (els.empty.parentNode) {
-          els.empty.remove();
-        }
-
-        const div = document.createElement("div");
-
-        div.className =
-          "bubble " +
-          role +
-          (partial ? " partial" : "");
-
-        els.transcript.appendChild(div);
-        els.transcript.scrollTop =
-          els.transcript.scrollHeight;
-
-        return div;
-      }
-
-      function addBubble(role, text, meta) {
-        const div = ensureBubble(role);
-
-        div.textContent = text;
-
-        if (meta) {
-          const span =
-            document.createElement("span");
-
-          span.className = "meta";
-          span.textContent = meta;
-
-          div.appendChild(span);
-        }
-
-        els.transcript.scrollTop =
-          els.transcript.scrollHeight;
-      }
-
       async function fetchToken() {
         const response =
           await fetch("/api/voice-token");
@@ -175,7 +119,7 @@ let toolStatusTurnId = null;
           activeSessionId = sessionId;
         }
 
-        els.connect.disabled = true;
+        setConnectButtonDisabled(true);
 
         setStatus(
           "connecting",
@@ -345,17 +289,19 @@ let toolStatusTurnId = null;
             ).padStart(2, "0"),
           ].join("-");
 
+          const voiceAgentSettings = getVoiceAgentSettings();
+
           connectionSocket.send(
             JSON.stringify({
               type: "session.update",
 
               session: {
                 system_prompt:
-                  els.prompt.value +
+                  voiceAgentSettings.prompt +
                   `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
 
                 greeting:
-                  els.greeting.value,
+                  voiceAgentSettings.greeting,
 
                 input: {
   turn_detection: {
@@ -368,7 +314,7 @@ let toolStatusTurnId = null;
 
                 output: {
                   voice:
-                    els.voice.value,
+                    voiceAgentSettings.voice,
                 },
 
                 tools: [
@@ -561,8 +507,7 @@ description:
               `Connected (${event.session_id})`
             );
 
-            els.disconnect.disabled =
-              false;
+            setDisconnectButtonDisabled(false);
 
             micSource.connect(
               workletNode
@@ -580,19 +525,7 @@ description:
             break;
 
           case "transcript.user.delta":
-            if (!userPartialEl) {
-              userPartialEl =
-                ensureBubble(
-                  "user",
-                  true
-                );
-            }
-
-            userPartialEl.textContent =
-              event.text;
-
-            els.transcript.scrollTop =
-              els.transcript.scrollHeight;
+            updateUserPartialTranscript(event.text);
 
             break;
 
@@ -602,21 +535,7 @@ description:
     invalidateToolTurn();
   }
 
-  if (userPartialEl) {
-              userPartialEl.classList.remove(
-                "partial"
-              );
-
-              userPartialEl.textContent =
-                event.text;
-
-              userPartialEl = null;
-            } else {
-              addBubble(
-                "user",
-                event.text
-              );
-            }
+            finalizeUserTranscript(event.text);
 
             break;
 
@@ -837,7 +756,8 @@ if (event.name === "ask_codex") {
     showToolStatus(
   "Codex is checking your project…",
   sessionId,
-  toolTurnId
+  toolTurnId,
+  isActiveToolTurn
 );
 
     const response = await fetch("/api/codex", {
@@ -980,77 +900,6 @@ addToolResult(sessionId, toolTurnId, event.call_id, {
         return true;
       }
 
-      function showToolStatus(message, sessionId, toolTurnId) {
-  if (!isActiveToolTurn(sessionId, toolTurnId)) {
-    return;
-  }
-
-  clearToolStatus();
-
-  toolStatusStartedAt = Date.now();
-  toolStatusSessionId = sessionId;
-  toolStatusTurnId = toolTurnId;
-
-  toolStatusElement = ensureBubble(
-    "agent",
-    true
-  );
-
-  function updateStatus() {
-    if (
-      !isActiveToolTurn(sessionId, toolTurnId) ||
-      toolStatusSessionId !== sessionId ||
-      toolStatusTurnId !== toolTurnId
-    ) {
-      return;
-    }
-
-    const seconds = Math.floor(
-      (Date.now() - toolStatusStartedAt) / 1000
-    );
-
-    toolStatusElement.textContent =
-      `${message} ${seconds}s`;
-  }
-
-  updateStatus();
-
-  toolStatusTimer = setInterval(
-    updateStatus,
-    1000
-  );
-}
-
-function clearToolStatus(sessionId, toolTurnId) {
-  if (
-    sessionId !== undefined &&
-    toolStatusSessionId !== sessionId
-  ) {
-    return;
-  }
-
-  if (
-    toolTurnId !== undefined &&
-    toolStatusTurnId !== toolTurnId
-  ) {
-    return;
-  }
-
-  if (toolStatusTimer) {
-    clearInterval(toolStatusTimer);
-    toolStatusTimer = null;
-  }
-
-  if (toolStatusElement) {
-    toolStatusElement.remove();
-    toolStatusElement = null;
-  }
-
-  toolStatusStartedAt = null;
-  toolStatusSessionId = null;
-  toolStatusTurnId = null;
-}
-
       function playPCM(b64, sessionId) {
         const bytes =
           Uint8Array.from(
@@ -1175,16 +1024,10 @@ function clearToolStatus(sessionId, toolTurnId) {
         disconnectAudioNode(microphoneSource);
         stopMicrophoneTracks(microphoneStream);
         closeAudioContext(audioContext);
-
-        userPartialEl = null;
-
+        resetUserPartialTranscript();
         setStatus(statusState, statusText);
-
-        els.connect.disabled =
-          false;
-
-        els.disconnect.disabled =
-          true;
+        setConnectButtonDisabled(false);
+        setDisconnectButtonDisabled(true);
       }
 
       function disconnect() {
@@ -1274,17 +1117,4 @@ function clearToolStatus(sessionId, toolTurnId) {
         return btoa(binary);
       }
 
-      els.connect.addEventListener(
-        "click",
-        connect
-      );
-
-      els.disconnect.addEventListener(
-        "click",
-        disconnect
-      );
-
-      els.clear.addEventListener(
-        "click",
-        clearTranscript
-      );
+      bindControls(connect, disconnect);

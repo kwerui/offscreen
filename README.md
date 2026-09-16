@@ -47,11 +47,11 @@ controls, developer workspace actions, personal productivity integrations, and
 search tools, is listed in [ROADMAP.md](ROADMAP.md). None of those planned
 features are implemented unless they appear under **Current features** above.
 
-`public/index.html` now contains the page markup, `public/styles.css` contains
-the page styles, and `public/app.js` contains the browser application logic,
-including UI rendering, audio handling, AssemblyAI/session coordination, and
-browser tool handlers. The frontend will continue to be separated
-incrementally while preserving the working voice flow.
+`public/index.html` contains the page markup, `public/styles.css` contains the
+page styles, and `public/ui.js` contains DOM lookup and UI rendering. The
+`public/app.js` entry point contains audio handling, AssemblyAI/session
+coordination, and browser tool handlers. The frontend will continue to be
+separated incrementally while preserving the working voice flow.
 
 ## Tech stack
 

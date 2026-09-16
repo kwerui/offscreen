@@ -25,6 +25,7 @@ public/
   index.html              Browser UI markup
   styles.css              Page styles
   app.js                  Browser application logic
+  ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
 offscreen.zip             Tracked release/archive artifact
@@ -57,10 +58,16 @@ records into the smaller object returned to the browser.
 It uses the read-only Google Calendar scope. Google credentials remain on the
 server/local machine and are not sent to the browser.
 
-### `public/index.html`, `public/styles.css`, and `public/app.js`
+### `public/index.html`, `public/styles.css`, and `public/app.js`, `public/ui.js`
+
+### Frontend files
 
 `index.html` contains the page markup and configuration controls.
 `styles.css` contains the page styles.
+
+`ui.js` owns DOM lookup and presentation concerns, including status updates,
+transcript rendering, partial user transcript state, control bindings, and
+tool-status bubbles.
 
 `app.js` contains:
 
@@ -230,7 +237,7 @@ public/
   voice-session.js                proposed AssemblyAI session lifecycle
   audio.js                        proposed microphone and playback logic
   tools.js                        proposed tool definitions and execution
-  ui.js                           proposed transcript/status rendering
+  ui.js                             existing transcript / status rendering
   pcm-processor.js                existing AudioWorklet
 ```
 
@@ -253,7 +260,7 @@ tests and manual verification protect the current behavior.
 | `audio.js` | Capture, convert/send, schedule, stop, and clean up audio. |
 | `tools.js` | Define supported tools and return a normalized tool result. |
 | `ui.js` | Update status and transcript DOM elements. |
-| `styles.css` | Hold the page styles currently embedded in `index.html`. |
+| `styles.css` | Hold the page styles. |
 
 ## Rules for deciding where new code belongs
 

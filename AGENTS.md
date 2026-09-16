@@ -52,12 +52,19 @@ Current structure:
   - calendar-specific logic
 
 - `public/index.html`
-  - frontend UI
+  - page markup
+
+- `public/styles.css`
+  - page styles
+
+- `public/ui.js`
+  - DOM lookup and UI rendering
+
+- `public/app.js`
   - AssemblyAI WebSocket session
   - microphone/audio handling
   - browser-side tool execution
-  - currently also contains markup, CSS, rendering, and turn coordination;
-    split these responsibilities incrementally rather than rewriting it
+  - session and turn coordination
 
 - `public/pcm-processor.js`
   - microphone PCM audio processing
