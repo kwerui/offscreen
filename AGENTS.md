@@ -92,6 +92,10 @@ Current structure:
   - reply-done gating
   - ordered result flushing
 
+- `public/codex-call-tracker.js`
+  - unresolved Codex interactive-call tracking
+  - supersession/cancellation bookkeeping
+
 Do not move backend credentials or Google API logic into the browser.
 
 If a feature grows substantially, prefer extracting it into a dedicated module instead of making `server.js` or `index.html` indefinitely larger.

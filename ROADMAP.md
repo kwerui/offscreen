@@ -139,8 +139,10 @@ For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
 now exist. Tool definitions are in `tools.js`; supported website execution is in
 `website-tool.js`; Calendar execution is in `calendar-tool.js`; Codex HTTP
 execution is in `codex-tool.js`; generic tool-result queue/task coordination is
-in `tool-result-coordinator.js`. AssemblyAI session lifecycle, tool-turn
-ownership, and Codex interactive-call tracking/supersession remain in `app.js`.
+in `tool-result-coordinator.js`. Codex interactive-call tracking and
+supersession/cancellation are in `codex-call-tracker.js`; AssemblyAI session
+lifecycle, tool-turn ownership, and the decision to supersede a turn remain in
+`app.js`.
 
 ## Phase 6 — Planned product work
 

@@ -55,8 +55,9 @@ page styles, and `public/ui.js` contains DOM lookup and UI rendering.
 `public/calendar-tool.js` owns Calendar HTTP execution. `public/codex-tool.js`
 owns Codex HTTP execution. `public/tool-result-coordinator.js` owns generic
 tool-result queue, task, reply-done, and flush coordination. `public/app.js`
-keeps AssemblyAI session lifecycle, tool turns, session/turn checks, and Codex
-interactive-call tracking and supersession/cancellation.
+keeps AssemblyAI session lifecycle, tool turns, session/turn checks, and the
+decision to supersede an earlier turn. `public/codex-call-tracker.js` owns
+Codex interactive-call tracking and explicit supersession/cancellation.
 The frontend will continue to be separated incrementally while preserving the
 working voice flow.
 

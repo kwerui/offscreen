@@ -156,11 +156,12 @@ execution lives in `public/website-tool.js`, Calendar HTTP execution lives in
 `public/calendar-tool.js`, and Codex HTTP execution lives in
 `public/codex-tool.js`.
 
-`public/app.js` continues to receive tool calls and dispatch execution,
-including Codex interactive-call tracking, supersession/cancellation, and
-session/turn protection. `public/tool-result-coordinator.js` coordinates the
-generic pending-result queue, active tasks, reply-done state, and result
-flushing.
+`public/app.js` continues to receive tool calls and dispatch execution. It owns
+session/turn protection and decides when a new user turn supersedes an earlier
+one. `public/codex-call-tracker.js` owns Codex interactive-call tracking and
+explicit supersession/cancellation. `public/tool-result-coordinator.js`
+coordinates the generic pending-result queue, active tasks, reply-done state,
+and result flushing.
 
 When adding a tool:
 

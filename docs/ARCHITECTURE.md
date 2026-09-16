@@ -27,6 +27,7 @@ public/
   index.html              Browser UI markup
   styles.css              Page styles
   app.js                  Browser orchestration, session lifecycle, and tool dispatch
+  codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
   tool-result-coordinator.js  Generic tool-result queue/task coordination
   audio.js                Microphone capture and PCM playback
   tools.js                Static AssemblyAI tool definitions
@@ -95,6 +96,11 @@ calls the local Codex endpoint, and returns its existing success or failure
 tool-result data. It does not know about AssemblyAI events, interactive-call
 tracking, supersession/cancellation, sessions, tool turns, or result queues.
 
+`codex-call-tracker.js` owns unresolved interactive Codex call bookkeeping and
+explicit cancellation of calls from a superseded session/turn. It receives a
+callback from `app.js` to send cancellation results, so it does not own the
+WebSocket, session lifecycle, tool-turn generation, or result coordination.
+
 `tool-result-coordinator.js` owns generic pending tool-result queueing,
 active-task tracking, reply-done gating, and ordered result flushing. It
 receives callbacks from `app.js` to check turn validity and send results; it
@@ -103,8 +109,8 @@ does not own the WebSocket, session lifecycle, a tool implementation, or UI.
 `app.js` contains:
 - AssemblyAI WebSocket/session lifecycle;
 - tool-call identification and execution dispatch;
-- Codex tool-call identification, interactive-call tracking,
-  supersession/cancellation, and session/turn checks;
+- Codex tool-call identification, session/turn checks, and the decision to
+  supersede an earlier user turn;
 - website and Calendar tool-call identification;
 - the WebSocket send primitive used by normal flushing and explicit Codex
   cancellation results.
@@ -201,9 +207,10 @@ AssemblyAI result queue.
 
 The `ask_codex` browser tool is identified and coordinated by `app.js`.
 `codex-tool.js` sends its task to `POST /api/codex` and returns the existing
-tool-result shape. `app.js` retains interactive call tracking,
-supersession/cancellation, and session/turn checks; generic queue/task result
-coordination lives in `tool-result-coordinator.js`. The server copies its own
+tool-result shape. `codex-call-tracker.js` retains interactive call tracking
+and supersession/cancellation; `app.js` retains session/turn checks and the
+decision to supersede a turn; generic queue/task result coordination lives in
+`tool-result-coordinator.js`. The server copies its own
 project directory into a temporary
 filtered inspection workspace, starts `codex exec` there in read-only and
 ephemeral modes with a restricted child environment, then returns its stdout

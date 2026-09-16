@@ -23,6 +23,7 @@ import { VOICE_TOOLS } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { runCodexTask } from "./codex-tool.js";
+import { createCodexCallTracker } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 
       const WS_URL =
@@ -32,7 +33,6 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
       let activeSessionId = 0;
 
       let activeToolTurnId = 0;
-      const unresolvedCodexCalls = new Map();
 
       function isActiveSession(sessionId) {
         return sessionId === activeSessionId;
@@ -44,6 +44,23 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
           toolTurnId === activeToolTurnId
         );
       }
+
+      const codexCallTracker = createCodexCallTracker({
+        sendCancellationResult: (sessionId, toolTurnId, callId, result) => {
+          const wasSent = sendToolResult(
+            sessionId,
+            toolTurnId,
+            callId,
+            result
+          );
+
+          if (wasSent) {
+            console.log("Superseded Codex tool cancelled");
+          }
+
+          return wasSent;
+        },
+      });
 
       const toolResultCoordinator = createToolResultCoordinator({
         isCurrent: isActiveToolTurn,
@@ -61,7 +78,7 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
           );
 
           if (wasSent) {
-            unresolvedCodexCalls.delete(callId);
+            codexCallTracker.resolveCall(callId);
           }
 
           return wasSent;
@@ -76,35 +93,6 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
         toolResultCoordinator.reset();
         clearToolStatus();
       }
-
-      function cancelSupersededCodexCalls(sessionId, toolTurnId) {
-        for (const [callId, codexCall] of unresolvedCodexCalls) {
-          if (
-            codexCall.sessionId !== sessionId ||
-            codexCall.toolTurnId !== toolTurnId
-          ) {
-            continue;
-          }
-
-          const wasSent = sendToolResult(
-            sessionId,
-            toolTurnId,
-            codexCall.callId,
-            {
-              success: false,
-              cancelled: true,
-              error: "Superseded by a newer user request.",
-            }
-          );
-
-          if (wasSent) {
-            unresolvedCodexCalls.delete(callId);
-            console.log("Superseded Codex tool cancelled");
-          }
-        }
-      }
-
-
 
       function endActiveSession(statusState = "", statusText = "Disconnected") {
         activeSessionId++;
@@ -374,7 +362,10 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 
           case "transcript.user":
           if (event.text?.trim()) {
-            cancelSupersededCodexCalls(sessionId, activeToolTurnId);
+            codexCallTracker.cancelSupersededCalls(
+              sessionId,
+              activeToolTurnId
+            );
     invalidateToolTurn();
   }
 
@@ -500,11 +491,7 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 // ---------------------------------
 
 if (event.name === "ask_codex") {
-  unresolvedCodexCalls.set(event.call_id, {
-    sessionId,
-    toolTurnId,
-    callId: event.call_id,
-  });
+  codexCallTracker.registerCall(sessionId, toolTurnId, event.call_id);
 
   const task = event.arguments?.task;
 
@@ -561,7 +548,7 @@ toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
         const socket = ws;
 
         invalidateToolTurn();
-        unresolvedCodexCalls.clear();
+        codexCallTracker.clear();
 
         ws = null;
 
