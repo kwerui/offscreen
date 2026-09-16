@@ -464,6 +464,7 @@ After the tool returns, summarize its result briefly.
       let activeToolTasks = 0;
       let toolReplyDone = false;
       let activeToolTurnId = 0;
+      const unresolvedCodexCalls = new Map();
 
       let toolStatusElement = null;
 let toolStatusTimer = null;
@@ -493,6 +494,33 @@ let toolStatusTurnId = null;
         activeToolTasks = 0;
         toolReplyDone = false;
         clearToolStatus();
+      }
+
+      function cancelSupersededCodexCalls(sessionId, toolTurnId) {
+        for (const [callId, codexCall] of unresolvedCodexCalls) {
+          if (
+            codexCall.sessionId !== sessionId ||
+            codexCall.toolTurnId !== toolTurnId
+          ) {
+            continue;
+          }
+
+          const wasSent = sendToolResult(
+            sessionId,
+            toolTurnId,
+            codexCall.callId,
+            {
+              success: false,
+              cancelled: true,
+              error: "Superseded by a newer user request.",
+            }
+          );
+
+          if (wasSent) {
+            unresolvedCodexCalls.delete(callId);
+            console.log("Superseded Codex tool cancelled");
+          }
+        }
       }
 
 
@@ -994,7 +1022,9 @@ description:
 
             break;
 
-          case "transcript.user":  if (event.text?.trim()) {
+          case "transcript.user":  
+          if (event.text?.trim()) {
+            cancelSupersededCodexCalls(sessionId, activeToolTurnId);
     invalidateToolTurn();
   }
 
@@ -1215,6 +1245,12 @@ description:
 // ---------------------------------
 
 if (event.name === "ask_codex") {
+  unresolvedCodexCalls.set(event.call_id, {
+    sessionId,
+    toolTurnId,
+    callId: event.call_id,
+  });
+
   try {
     const task = event.arguments?.task;
 
@@ -1336,12 +1372,16 @@ addToolResult(sessionId, toolTurnId, event.call_id, {
           const tool of
           pendingToolResults
         ) {
-          sendToolResult(
+          const wasSent = sendToolResult(
             sessionId,
             toolTurnId,
             tool.call_id,
             tool.result
           );
+
+          if (wasSent) {
+            unresolvedCodexCalls.delete(tool.call_id);
+          }
         }
 
         pendingToolResults = [];
@@ -1548,6 +1588,7 @@ function clearToolStatus(sessionId, toolTurnId) {
         const microphoneSource = micSource;
 
         invalidateToolTurn();
+        unresolvedCodexCalls.clear();
         flushPlayback();
 
         ws = null;
