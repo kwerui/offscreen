@@ -14,6 +14,7 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import "dotenv/config";
+import * as chrono from "chrono-node";
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -80,6 +81,69 @@ app.get("/api/calendar/events", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to fetch calendar events",
+    });
+  }
+});
+
+app.get("/api/calendar/query", async (req, res) => {
+  try {
+    const when = String(req.query.when || "").trim();
+
+    if (!when) {
+      return res.status(400).json({
+        error: "Calendar query is required",
+      });
+    }
+
+    const rangeMap = {
+      upcoming: "upcoming",
+      today: "today",
+      tomorrow: "tomorrow",
+      "this week": "this_week",
+      "next week": "next_week",
+      "this month": "this_month",
+      "next month": "next_month",
+    };
+
+    const normalized = when.toLowerCase();
+
+    if (rangeMap[normalized]) {
+      const data = await getCalendarEvents(
+        rangeMap[normalized]
+      );
+
+      return res.json(data);
+    }
+
+    const parsedDate = chrono.parseDate(
+      when,
+      new Date(),
+      {
+        forwardDate: true,
+      }
+    );
+
+    if (!parsedDate) {
+      return res.status(400).json({
+        error: `Could not understand date: ${when}`,
+      });
+    }
+
+    const date = [
+      parsedDate.getFullYear(),
+      String(parsedDate.getMonth() + 1).padStart(2, "0"),
+      String(parsedDate.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    const data =
+      await getCalendarEventsForDate(date);
+
+    res.json(data);
+  } catch (err) {
+    console.error("Calendar query error:", err);
+
+    res.status(500).json({
+      error: "Failed to process calendar query",
     });
   }
 });

@@ -301,9 +301,9 @@ You can access the user's real Google Calendar using get_calendar_events.
 
 For EVERY question about the user's calendar, schedule, events, commitments, or availability, ALWAYS call get_calendar_events.
 
-Pass the time period the user is asking about in the "when" argument.
+Calendar requests can be phrased casually or grammatically imperfectly. Do not require filler words such as "the", "on", or "this".
 
-Examples:
+Treat all of these as calendar requests:
 
 User: "What's my next event?"
 Call get_calendar_events with when = "upcoming"
@@ -311,27 +311,44 @@ Call get_calendar_events with when = "upcoming"
 User: "What do I have today?"
 Call get_calendar_events with when = "today"
 
-User: "What do I have tomorrow?"
-Call get_calendar_events with when = "tomorrow"
-
 User: "What do I have this month?"
 Call get_calendar_events with when = "this month"
 
-User: "What do I have next month?"
-Call get_calendar_events with when = "next month"
+User: "What do I have September 23rd?"
+Call get_calendar_events with when = "September 23rd"
 
 User: "What do I have on September 23rd?"
 Call get_calendar_events with when = "September 23rd"
 
+User: "Am I free 28th?"
+Call get_calendar_events with when = "28th"
+
+User: "Am I free on 28th?"
+Call get_calendar_events with when = "28th"
+
+User: "Am I free on the 28th?"
+Call get_calendar_events with when = "28th"
+
 User: "What's on Friday?"
 Call get_calendar_events with when = "Friday"
 
-User: "Am I free on the 28th?"
-Call get_calendar_events with when = "the 28th"
+User: "Am I free on December 1st?"
+Call get_calendar_events with when = "December 1st"
 
-Never invent calendar information.
+User: "Am I free on the 1st of December?"
+Call get_calendar_events with when = "1st of December"
+
+User: "What do I have on the 23rd of September?"
+Call get_calendar_events with when = "23rd of September"
+
+Dates may be spoken month-first or day-first. "December 1st" and "1st of December" mean the same kind of calendar request and must both call get_calendar_events.
+
+If a user asks whether they are free, busy, available, or scheduled at any time or date, that is ALWAYS a calendar request.
+
 Never answer a calendar question without first calling get_calendar_events.
-Do not claim an action succeeded until its tool reports success.</textarea>
+Never invent calendar information.
+
+</textarea>
         </div>
       </div>
 
@@ -623,33 +640,26 @@ Do not claim an action succeeded until its tool reports success.</textarea>
                     },
                   },
 
-                  {
-                    type: "function",
+{
+  type: "function",
+  name: "get_calendar_events",
+description:
+  "Check the user's real Google Calendar. ALWAYS call this for ANY question about schedule, events, commitments, availability, being free or busy, or any named date/day. Date phrasing may be casual and can be month-first or day-first, such as 'September 23rd', '23rd of September', 'December 1st', '1st of December', '28th', or 'Friday'.",
+  parameters: {
+    type: "object",
+    properties: {
+      when: {
+        type: "string",
+description:
+  "The requested time period or date, for example upcoming, today, tomorrow, this month, September 23rd, 23rd of September, December 1st, 1st of December, 28th, or Friday.",
+      },
+    },
+    required: ["when"],
+  },
 
-                    name:
-                      "get_calendar_events",
-
-                    description:
-                      "Check the user's real Google Calendar. ALWAYS call this for ANY question about the user's calendar, schedule, events, commitments, or availability, including exact dates.",
-
-                    parameters: {
-                      type: "object",
-
-                      properties: {
-                        when: {
-                          type:
-                            "string",
-
-                          description:
-                            "The requested time period, for example upcoming, today, tomorrow, this week, next week, this month, next month, September 23rd, Friday, or the 28th.",
-                        },
-                      },
-
-                      required: [
-                        "when",
-                      ],
-                    },
-                  },
+  execution_mode: "hold",
+  timeout_seconds: 15,
+},
                 ],
               },
             })
@@ -967,119 +977,58 @@ Do not claim an action succeeded until its tool reports success.</textarea>
         // GOOGLE CALENDAR
         // ---------------------------------
 
-        if (
-          event.name ===
-          "get_calendar_events"
-        ) {
-          try {
-            const when =
-              event.arguments?.when;
+        if (event.name === "get_calendar_events") {
+  try {
+    const when = event.arguments?.when;
 
-            if (!when) {
-              throw new Error(
-                "Calendar time period is required."
-              );
-            }
+    if (!when) {
+      throw new Error(
+        "Calendar time period is required."
+      );
+    }
 
-            console.log(
-              "CALENDAR TOOL FIRED!"
-            );
+    console.log("CALENDAR TOOL FIRED!");
+    console.log("Requested time:", when);
 
-            console.log(
-              "Requested time:",
-              when
-            );
+    const response = await fetch(
+      `/api/calendar/query?when=${encodeURIComponent(when)}`
+    );
 
-            const request =
-              resolveCalendarRequest(
-                when
-              );
+    if (!response.ok) {
+      const errorText = await response.text();
 
-            console.log(
-              "Resolved calendar request:",
-              request
-            );
+      throw new Error(
+        `Calendar request failed with status ${response.status}: ${errorText}`
+      );
+    }
 
-            let url;
+    const data = await response.json();
 
-            if (
-              request.type ===
-              "range"
-            ) {
-              url =
-                `/api/calendar/events?range=${encodeURIComponent(
-                  request.range
-                )}`;
-            } else {
-              url =
-                `/api/calendar/date?date=${encodeURIComponent(
-                  request.date
-                )}`;
-            }
+    console.log("Calendar result:", data);
 
-            console.log(
-              "Fetching:",
-              url
-            );
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: true,
+        requested_when: when,
+        timezone: data.timezone,
+        events: data.events || [],
+      },
+    });
+  } catch (err) {
+    console.error("Calendar tool failed:", err);
 
-            const response =
-              await fetch(url);
+    pendingToolResults.push({
+      call_id: event.call_id,
+      result: {
+        success: false,
+        error: err.message,
+      },
+    });
+  }
 
-            if (!response.ok) {
-              const errorText =
-                await response.text();
-
-              throw new Error(
-                `Calendar request failed with status ${response.status}: ${errorText}`
-              );
-            }
-
-            const data =
-              await response.json();
-
-            console.log(
-              "Calendar result:",
-              data
-            );
-
-            pendingToolResults.push({
-              call_id:
-                event.call_id,
-
-              result: {
-                success: true,
-
-                requested_when:
-                  when,
-
-                timezone:
-                  data.timezone,
-
-                events:
-                  data.events || [],
-              },
-            });
-          } catch (err) {
-            console.error(
-              "Calendar tool failed:",
-              err
-            );
-
-            pendingToolResults.push({
-              call_id:
-                event.call_id,
-
-              result: {
-                success: false,
-
-                error:
-                  err.message,
-              },
-            });
-          }
-
-          return;
-        }
+  return;
+}
 
         // ---------------------------------
         // UNKNOWN TOOL
@@ -1098,312 +1047,7 @@ Do not claim an action succeeded until its tool reports success.</textarea>
         });
       }
 
-      function resolveCalendarRequest(
-        when
-      ) {
-        const original =
-          String(when).trim();
 
-        const normalized =
-          original
-            .toLowerCase()
-            .replace(/[,.?]/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-
-        const ranges = {
-          upcoming:
-            "upcoming",
-
-          "next event":
-            "upcoming",
-
-          "what's coming up":
-            "upcoming",
-
-          today:
-            "today",
-
-          tomorrow:
-            "tomorrow",
-
-          "this week":
-            "this_week",
-
-          "next week":
-            "next_week",
-
-          "this month":
-            "this_month",
-
-          "next month":
-            "next_month",
-        };
-
-        if (
-          ranges[normalized]
-        ) {
-          return {
-            type: "range",
-
-            range:
-              ranges[normalized],
-          };
-        }
-
-        const isoMatch =
-          normalized.match(
-            /^(\d{4})-(\d{2})-(\d{2})$/
-          );
-
-        if (isoMatch) {
-          return {
-            type: "date",
-
-            date:
-              normalized,
-          };
-        }
-
-        const monthNames = {
-          january: 0,
-          february: 1,
-          march: 2,
-          april: 3,
-          may: 4,
-          june: 5,
-          july: 6,
-          august: 7,
-          september: 8,
-          october: 9,
-          november: 10,
-          december: 11,
-        };
-
-        const monthPattern =
-          Object.keys(
-            monthNames
-          ).join("|");
-
-        const monthDateMatch =
-          normalized.match(
-            new RegExp(
-              `(?:on )?(${monthPattern})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(\\d{4}))?`
-            )
-          );
-
-        if (monthDateMatch) {
-          const month =
-            monthNames[
-              monthDateMatch[1]
-            ];
-
-          const day =
-            Number(
-              monthDateMatch[2]
-            );
-
-          const now =
-            new Date();
-
-          let year =
-            monthDateMatch[3]
-              ? Number(
-                  monthDateMatch[3]
-                )
-              : now.getFullYear();
-
-          let date =
-            new Date(
-              year,
-              month,
-              day
-            );
-
-          if (
-            !monthDateMatch[3] &&
-            date <
-              new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate()
-              )
-          ) {
-            year++;
-            date = new Date(
-              year,
-              month,
-              day
-            );
-          }
-
-          if (
-            date.getMonth() !==
-              month ||
-            date.getDate() !==
-              day
-          ) {
-            throw new Error(
-              `Invalid calendar date: ${original}`
-            );
-          }
-
-          return {
-            type: "date",
-
-            date:
-              formatLocalDate(
-                date
-              ),
-          };
-        }
-
-        const weekdays = {
-          sunday: 0,
-          monday: 1,
-          tuesday: 2,
-          wednesday: 3,
-          thursday: 4,
-          friday: 5,
-          saturday: 6,
-        };
-
-        const weekday =
-          Object.keys(
-            weekdays
-          ).find((name) =>
-            normalized.includes(
-              name
-            )
-          );
-
-        if (weekday) {
-          const now =
-            new Date();
-
-          const target =
-            weekdays[weekday];
-
-          let daysAhead =
-            (
-              target -
-              now.getDay() +
-              7
-            ) % 7;
-
-          if (
-            normalized.startsWith(
-              "next "
-            ) &&
-            daysAhead === 0
-          ) {
-            daysAhead = 7;
-          }
-
-          const date =
-            new Date(
-              now.getFullYear(),
-              now.getMonth(),
-              now.getDate() +
-                daysAhead
-            );
-
-          return {
-            type: "date",
-
-            date:
-              formatLocalDate(
-                date
-              ),
-          };
-        }
-
-        const dayOnlyMatch =
-          normalized.match(
-            /(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?$/
-          );
-
-        if (dayOnlyMatch) {
-          const requestedDay =
-            Number(
-              dayOnlyMatch[1]
-            );
-
-          if (
-            requestedDay < 1 ||
-            requestedDay > 31
-          ) {
-            throw new Error(
-              `Invalid calendar day: ${requestedDay}`
-            );
-          }
-
-          const now =
-            new Date();
-
-          for (
-            let offset = 0;
-            offset < 14;
-            offset++
-          ) {
-            const candidate =
-              new Date(
-                now.getFullYear(),
-                now.getMonth() +
-                  offset,
-                requestedDay
-              );
-
-            if (
-              candidate.getDate() !==
-              requestedDay
-            ) {
-              continue;
-            }
-
-            const today =
-              new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate()
-              );
-
-            if (
-              candidate >=
-              today
-            ) {
-              return {
-                type: "date",
-
-                date:
-                  formatLocalDate(
-                    candidate
-                  ),
-              };
-            }
-          }
-        }
-
-        throw new Error(
-          `I couldn't understand the calendar period: "${original}"`
-        );
-      }
-
-      function formatLocalDate(
-        date
-      ) {
-        return [
-          date.getFullYear(),
-
-          String(
-            date.getMonth() + 1
-          ).padStart(2, "0"),
-
-          String(
-            date.getDate()
-          ).padStart(2, "0"),
-        ].join("-");
-      }
 
       function maybeSendToolResults() {
         if (!toolReplyDone) {
