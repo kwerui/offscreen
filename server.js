@@ -88,6 +88,48 @@ app.get("/api/calendar/events", async (req, res) => {
   }
 });
 
+function getNextDateForDayOfMonth(
+  dayOfMonth,
+  referenceDate = new Date()
+) {
+  if (
+    !Number.isInteger(dayOfMonth) ||
+    dayOfMonth < 1 ||
+    dayOfMonth > 31
+  ) {
+    return null;
+  }
+
+  const today = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate()
+  );
+
+  for (
+    let monthOffset = 0;
+    monthOffset < 12;
+    monthOffset++
+  ) {
+    const candidate = new Date(
+      today.getFullYear(),
+      today.getMonth() + monthOffset,
+      dayOfMonth
+    );
+
+    // Skip impossible dates such as February 31.
+    if (candidate.getDate() !== dayOfMonth) {
+      continue;
+    }
+
+    if (candidate >= today) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 app.get("/api/calendar/query", async (req, res) => {
   try {
     const when = String(req.query.when || "").trim();
@@ -118,13 +160,26 @@ app.get("/api/calendar/query", async (req, res) => {
       return res.json(data);
     }
 
-    const parsedDate = chrono.parseDate(
-      when,
-      new Date(),
-      {
-        forwardDate: true,
-      }
-    );
+    const bareDayMatch = normalized.match(
+  /^(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?$/
+);
+
+let parsedDate;
+
+if (bareDayMatch) {
+  const dayOfMonth = Number(bareDayMatch[1]);
+
+  parsedDate =
+    getNextDateForDayOfMonth(dayOfMonth);
+} else {
+  parsedDate = chrono.parseDate(
+    when,
+    new Date(),
+    {
+      forwardDate: true,
+    }
+  );
+}
 
     if (!parsedDate) {
       return res.status(400).json({
@@ -182,17 +237,28 @@ app.post("/api/codex", async (req, res) => {
     });
   }
 
-  console.log("CODEX TASK:", task);
+ console.log("CODEX TASK:", task);
 
-  const child = spawn(
-    "codex",
-    [
-      "exec",
-      "--ephemeral",
-      "--sandbox",
-      "read-only",
-      task,
-    ],
+const codexTask =
+  `${task}\n\n` +
+  "Answer in at most 3 short sentences. " +
+  "Do not use subagents or delegate this task. " +
+  "Do not perform a broad repository review unless necessary. " +
+  "Inspect only the minimum files needed to answer the question. " +
+  "Stop as soon as you have enough information to answer.";
+
+const child = spawn(
+  "codex",
+  [
+    "exec",
+    "--ephemeral",
+    "--sandbox",
+    "read-only",
+    "-c",
+    'model_reasoning_effort="low"',
+    codexTask,
+  ],
+
     {
       cwd: process.cwd(),
       env: process.env,

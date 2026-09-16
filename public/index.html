@@ -348,28 +348,31 @@ If a user asks whether they are free, busy, available, or scheduled at any time 
 Never answer a calendar question without first calling get_calendar_events.
 Never invent calendar information.
 
-You can use Codex through ask_codex to inspect and analyze the user's current software project.
+CODEX TOOL ROUTING
 
-When the user asks you to use Codex, asks a question about their repository or code, asks why code or tests are failing, asks for a code review, or asks Codex to investigate something, ALWAYS call ask_codex.
+If the user says "Codex" or "ask Codex", ALWAYS call ask_codex.
 
-Do not pretend to have inspected the project yourself when the answer requires repository access. Use ask_codex.
+If answering the user's question requires inspecting the local project,
+repository, source files, tests, implementation, or architecture,
+ALWAYS call ask_codex.
 
-Keep the final spoken answer concise. Summarize Codex's findings rather than reading a very long response verbatim.
+Do not answer repository-specific questions from general knowledge.
+Do not ask the user what they want Codex to do when their request already
+contains a task.
 
 Examples:
 
-User: "Ask Codex what this project does."
-Call ask_codex with task = "Summarize what this project does."
+"Ask Codex what this project does."
+→ call ask_codex
 
-User: "Why are my tests failing?"
-Call ask_codex with task = "Investigate why the tests are failing."
+"Which file handles Google Calendar?"
+→ call ask_codex
 
-User: "Ask Codex to find bugs in my calendar implementation."
-Call ask_codex with task = "Inspect the calendar implementation and identify likely bugs."
+"Ask Codex to inspect my tests."
+→ call ask_codex
 
-User: "What files handle the calendar?"
-Call ask_codex with task = "Find which files implement the calendar functionality and explain their roles."
-
+"Why might JavaScript promises reject?"
+→ do not call ask_codex unless the user asks about this project's code.
 </textarea>
         </div>
       </div>
@@ -439,6 +442,10 @@ Call ask_codex with task = "Find which files implement the calendar functionalit
       let pendingToolResults = [];
       let activeToolTasks = 0;
       let toolReplyDone = false;
+
+      let toolStatusElement = null;
+let toolStatusTimer = null;
+let toolStatusStartedAt = null;
 
       function setStatus(state, text) {
         els.statusDot.className = "dot " + state;
@@ -687,21 +694,21 @@ description:
   type: "function",
   name: "ask_codex",
   description:
-    "Ask Codex to inspect, explain, debug, review, or answer questions about the current local software project. Use this when the user asks about their code, repository, tests, bugs, implementation, architecture, or asks to use Codex.",
+    "MANDATORY tool for accessing the user's local software project through Codex. Call this whenever the user says 'Codex' or 'ask Codex', or asks about the contents, files, code, architecture, tests, bugs, implementation, or structure of the local project. Do not answer repository-specific questions yourself because you do not have direct access to the repository without this tool.",
   parameters: {
     type: "object",
     properties: {
       task: {
         type: "string",
         description:
-          "The coding or repository question Codex should investigate.",
+          "A complete standalone instruction for Codex to perform on the local repository. Preserve the user's actual request.",
       },
     },
     required: ["task"],
   },
   execution_mode: "hold",
-  timeout_seconds: 120,
-},
+  timeout_seconds: 45,
+}
                 ],
               },
             })
@@ -1071,24 +1078,7 @@ description:
 
   return;
 }
-
-        // ---------------------------------
-        // UNKNOWN TOOL
-        // ---------------------------------
-
-        pendingToolResults.push({
-          call_id:
-            event.call_id,
-
-          result: {
-            success: false,
-
-            error:
-              `Unknown tool: ${event.name}`,
-          },
-        });
-
-        // ---------------------------------
+// ---------------------------------
 // CODEX
 // ---------------------------------
 
@@ -1103,19 +1093,16 @@ if (event.name === "ask_codex") {
     console.log("CODEX TOOL FIRED!");
     console.log("Codex task:", task);
 
+    showToolStatus(
+  "Codex is checking your project…"
+);
+
     const response = await fetch("/api/codex", {
       method: "POST",
-
       headers: {
         "Content-Type": "application/json",
       },
-
-      body: JSON.stringify({
-        task:
-          `${task}\n\n` +
-          "Give a concise answer suitable for being spoken aloud. " +
-          "Focus on the most important findings.",
-      }),
+      body: JSON.stringify({ task }),
     });
 
     if (!response.ok) {
@@ -1123,27 +1110,27 @@ if (event.name === "ask_codex") {
 
       throw new Error(
         `Codex request failed with status ${response.status}: ${errorText}`
+        
       );
     }
 
     const data = await response.json();
-
+    clearToolStatus();
     console.log("Codex result:", data.output);
 
     pendingToolResults.push({
       call_id: event.call_id,
-
       result: {
         success: true,
         output: data.output,
       },
     });
   } catch (err) {
+    clearToolStatus();
     console.error("Codex tool failed:", err);
 
     pendingToolResults.push({
       call_id: event.call_id,
-
       result: {
         success: false,
         error: err.message,
@@ -1154,8 +1141,19 @@ if (event.name === "ask_codex") {
   return;
 }
 
-      }
+// ---------------------------------
+// UNKNOWN TOOL
+// ---------------------------------
 
+pendingToolResults.push({
+  call_id: event.call_id,
+  result: {
+    success: false,
+    error: `Unknown tool: ${event.name}`,
+  },
+});
+
+      }
 
 
       function maybeSendToolResults() {
@@ -1217,6 +1215,47 @@ if (event.name === "ask_codex") {
 
         pendingToolResults = [];
       }
+
+      function showToolStatus(message) {
+  clearToolStatus();
+
+  toolStatusStartedAt = Date.now();
+
+  toolStatusElement = ensureBubble(
+    "agent",
+    true
+  );
+
+  function updateStatus() {
+    const seconds = Math.floor(
+      (Date.now() - toolStatusStartedAt) / 1000
+    );
+
+    toolStatusElement.textContent =
+      `${message} ${seconds}s`;
+  }
+
+  updateStatus();
+
+  toolStatusTimer = setInterval(
+    updateStatus,
+    1000
+  );
+}
+
+function clearToolStatus() {
+  if (toolStatusTimer) {
+    clearInterval(toolStatusTimer);
+    toolStatusTimer = null;
+  }
+
+  if (toolStatusElement) {
+    toolStatusElement.remove();
+    toolStatusElement = null;
+  }
+
+  toolStatusStartedAt = null;
+}
 
       function playPCM(b64) {
         const bytes =
