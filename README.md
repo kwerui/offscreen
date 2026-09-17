@@ -21,6 +21,10 @@ Codex CLI to inspect the current project.
   session.
 - Explicit voice cancellation: ask Offscreen to cancel the current in-progress
   tool work. This keeps the voice session connected.
+- Voice-first standby: ask Offscreen to pause listening or go on standby while
+  the voice session remains connected. Normal requests are ignored while in
+  standby; ask it to resume listening or disconnect, or use the Resume listening
+  UI button as a fallback.
 - Explicit voice repeat: ask Offscreen to repeat its most recent completed
   response.
 - Explicit voice summarize/shorten: ask Offscreen to summarize or shorten its

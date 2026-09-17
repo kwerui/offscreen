@@ -81,6 +81,7 @@ function setUpBrowserEnvironment() {
   for (const id of [
     "connect",
     "disconnect",
+    "resume-listening",
     "clear",
     "voice",
     "prompt",

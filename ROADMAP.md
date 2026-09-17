@@ -39,6 +39,10 @@ Document and preserve the functionality already present:
   disconnect.
 - The agent can cancel current in-progress tool work when the user explicitly
   asks, while keeping the voice session connected.
+- The agent can enter voice-first standby when the user explicitly asks to
+  pause listening. The voice session remains connected and normal requests are
+  ignored; users can ask to resume listening or disconnect, and can also use the
+  Resume listening UI fallback.
 - The agent can repeat its most recent completed spoken response when the user
   explicitly asks.
 - The agent can summarize or shorten its most recent completed spoken response
@@ -151,7 +155,6 @@ during cleanup work without a focused feature specification.
 
 ### Voice / session control
 
-- Stop listening.
 - Report the current activity or running tool by voice.
 
 ### Developer workspace

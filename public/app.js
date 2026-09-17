@@ -7,6 +7,7 @@ import {
   resetUserPartialTranscript,
   setConnectButtonDisabled,
   setDisconnectButtonDisabled,
+  setResumeListeningButtonDisabled,
   setStatus,
   showToolStatus,
   updateUserPartialTranscript,
@@ -28,6 +29,12 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
 
 let activeSessionId = 0;
+
+let standbyMode = false;
+
+let normalSystemPrompt = "";
+
+let suppressStandbyReply = false;
 
 let activeToolTurnId = 0;
 
@@ -54,7 +61,28 @@ const FIXED_OFFSCREEN_INSTRUCTIONS =
   "response, preserve its key meaning, follow the user's requested degree and " +
   "style of shortening, do not introduce unrelated information or call or rerun " +
   "any other tool, and answer directly without a preface when possible. When it " +
-  "fails, briefly state that no completed response is available.";
+  "fails, briefly state that no completed response is available. When the user " +
+  "explicitly asks Offscreen to pause listening, stop listening, or go on standby, " +
+  "ALWAYS call pause_listening.";
+
+const STANDBY_INSTRUCTIONS =
+  "You are in standby. Do not answer questions, start tools, or perform normal " +
+  "tasks. Wait for the client to handle explicit requests to resume listening or " +
+  "disconnect.";
+
+const STANDBY_RESUME_COMMANDS = new Set([
+  "resume listening",
+  "start listening again",
+  "continue listening",
+  "leave standby",
+]);
+
+const STANDBY_DISCONNECT_COMMANDS = new Set([
+  "disconnect",
+  "disconnect session",
+  "end the session",
+  "hang up",
+]);
 
 function isActiveSession(sessionId) {
   return sessionId === activeSessionId;
@@ -64,6 +92,78 @@ function isActiveToolTurn(sessionId, toolTurnId) {
   return (
     isActiveSession(sessionId) && toolTurnId === activeToolTurnId
   );
+}
+
+function getSystemPrompt() {
+  const standbyInstructions = standbyMode
+    ? `\n\n${STANDBY_INSTRUCTIONS}`
+    : "";
+
+  return `${normalSystemPrompt}${standbyInstructions}`;
+}
+
+function updateSystemPrompt() {
+  return voiceSession.send({
+    type: "session.update",
+    session: {
+      system_prompt: getSystemPrompt(),
+      tools: standbyMode ? [] : VOICE_TOOLS,
+    },
+  });
+}
+
+function getStandbyCommand(text) {
+  const normalizedText = text
+    ?.trim()
+    .toLowerCase()
+    .replace(/[.?!]+$/, "")
+    .replace(/\s+/g, " ");
+
+  if (STANDBY_RESUME_COMMANDS.has(normalizedText)) {
+    return "resume";
+  }
+
+  if (STANDBY_DISCONNECT_COMMANDS.has(normalizedText)) {
+    return "disconnect";
+  }
+
+  return null;
+}
+
+function enterStandby(sessionId) {
+  if (!isActiveSession(sessionId) || !voiceSession.isOpen()) {
+    return;
+  }
+
+  if (!standbyMode) {
+    standbyMode = true;
+    suppressStandbyReply = false;
+    updateSystemPrompt();
+  }
+
+  setResumeListeningButtonDisabled(false);
+  setStatus(
+    "connected",
+    'Standby — audio is still transcribed for “resume listening” or “disconnect”; other speech is ignored.'
+  );
+}
+
+function leaveStandby() {
+  if (!standbyMode || !voiceSession.isOpen()) {
+    return;
+  }
+
+  standbyMode = false;
+
+  // If the user resumes while an ignored standby reply is still finishing,
+  // keep suppressing that old reply until its reply.done arrives.
+  if (!isAgentReplyOpen) {
+    suppressStandbyReply = false;
+  }
+
+  updateSystemPrompt();
+  setResumeListeningButtonDisabled(true);
+  setStatus("connected", "Connected");
 }
 
 const voiceSession = createVoiceSession();
@@ -121,6 +221,7 @@ function resetStoredAgentResponses() {
   lastCompletedAgentResponse = null;
   pendingAgentResponse = null;
   isAgentReplyOpen = false;
+  suppressStandbyReply = false;
 }
 
 function cancelCurrentToolWork(sessionId, toolTurnId, callId) {
@@ -152,6 +253,8 @@ async function connect() {
   const sessionId = activeSessionId + 1;
 
   resetStoredAgentResponses();
+  standbyMode = false;
+  setResumeListeningButtonDisabled(true);
 
   if (voiceSession.hasConnection() || hasAudioResources()) {
     activeSessionId = sessionId;
@@ -219,14 +322,15 @@ async function connect() {
         ].join("-");
 
         const voiceAgentSettings = getVoiceAgentSettings();
+        normalSystemPrompt =
+          voiceAgentSettings.prompt +
+          `\n\n${FIXED_OFFSCREEN_INSTRUCTIONS}` +
+          `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`;
 
         voiceSession.send({
           type: "session.update",
           session: {
-            system_prompt:
-              voiceAgentSettings.prompt +
-              `\n\n${FIXED_OFFSCREEN_INSTRUCTIONS}` +
-              `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
+            system_prompt: getSystemPrompt(),
 
             greeting: voiceAgentSettings.greeting,
 
@@ -297,6 +401,7 @@ function handleEvent(event, sessionId) {
       setStatus("connected", `Connected (${event.session_id})`);
 
       setDisconnectButtonDisabled(false);
+      setResumeListeningButtonDisabled(true);
 
       startMicrophoneCapture();
 
@@ -317,6 +422,23 @@ function handleEvent(event, sessionId) {
       break;
 
     case "transcript.user":
+      if (standbyMode) {
+        const standbyCommand = getStandbyCommand(event.text);
+        const transcriptMeta = standbyCommand ? null : "ignored in standby";
+
+        finalizeUserTranscript(event.text, transcriptMeta);
+
+        if (standbyCommand === "resume") {
+          leaveStandby();
+        } else if (standbyCommand === "disconnect") {
+          endActiveSession();
+        } else {
+          suppressStandbyReply = true;
+        }
+
+        return;
+      }
+
       if (event.text?.trim()) {
         // An interrupted reply alone does not prove a newer request exists.
         for (const interruptedToolTurnId of interruptedToolTurnIds) {
@@ -343,10 +465,18 @@ function handleEvent(event, sessionId) {
       break;
 
     case "reply.audio":
+      if (suppressStandbyReply) {
+        break;
+      }
+
       playPCM(event.data, () => isActiveSession(sessionId));
       break;
 
     case "transcript.agent": {
+      if (suppressStandbyReply) {
+        break;
+      }
+
       const meta = event.interrupted ? "interrupted" : null;
 
       addBubble("agent", event.text, meta);
@@ -362,6 +492,24 @@ function handleEvent(event, sessionId) {
       const toolTurnId = activeToolTurnId;
 
       toolResultCoordinator.startTask();
+
+      if (standbyMode) {
+        // Standby is client-controlled. A stale or misclassified model tool
+        // call must never escape standby and execute real work.
+        suppressStandbyReply = true;
+        toolResultCoordinator.queueResult(
+          sessionId,
+          toolTurnId,
+          event.call_id,
+          {
+            success: false,
+            error: "Tool calls are unavailable while Offscreen is in standby.",
+          }
+        );
+        toolResultCoordinator.finishTask();
+        toolResultCoordinator.flush(sessionId, toolTurnId);
+        break;
+      }
 
       handleToolCall(event, sessionId, toolTurnId)
         .catch(() => {
@@ -381,6 +529,17 @@ function handleEvent(event, sessionId) {
 
     case "reply.done":
       isAgentReplyOpen = false;
+
+      if (suppressStandbyReply) {
+        if (!standbyMode) {
+          suppressStandbyReply = false;
+        }
+
+        pendingAgentResponse = null;
+        toolResultCoordinator.setReplyDone(true);
+        toolResultCoordinator.flush(sessionId, activeToolTurnId);
+        break;
+      }
 
       if (event.status === "interrupted") {
         pendingAgentResponse = null;
@@ -411,6 +570,23 @@ function handleEvent(event, sessionId) {
 
 async function handleToolCall(event, sessionId, toolTurnId) {
   console.log("Tool called:", event.name);
+
+  // ---------------------------------
+  // PAUSE LISTENING
+  // ---------------------------------
+
+  if (event.name === "pause_listening") {
+    enterStandby(sessionId);
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      { success: true, standby: true }
+    );
+
+    return;
+  }
 
   // ---------------------------------
   // DISCONNECT SESSION
@@ -614,6 +790,8 @@ function teardown(statusState = "", statusText = "Disconnected") {
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
   resetStoredAgentResponses();
+  standbyMode = false;
+  normalSystemPrompt = "";
 
   voiceSession.disconnect();
   tearDownAudio();
@@ -621,10 +799,11 @@ function teardown(statusState = "", statusText = "Disconnected") {
   setStatus(statusState, statusText);
   setConnectButtonDisabled(false);
   setDisconnectButtonDisabled(true);
+  setResumeListeningButtonDisabled(true);
 }
 
 function disconnect() {
   endActiveSession();
 }
 
-bindControls(connect, disconnect);
+bindControls(connect, disconnect, leaveStandby);

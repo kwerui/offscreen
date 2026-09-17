@@ -1,6 +1,7 @@
 const els = {
   connect: document.getElementById("connect"),
   disconnect: document.getElementById("disconnect"),
+  resumeListening: document.getElementById("resume-listening"),
   clear: document.getElementById("clear"),
   voice: document.getElementById("voice"),
   prompt: document.getElementById("prompt"),
@@ -31,6 +32,10 @@ export function setDisconnectButtonDisabled(disabled) {
   els.disconnect.disabled = disabled;
 }
 
+export function setResumeListeningButtonDisabled(disabled) {
+  els.resumeListening.disabled = disabled;
+}
+
 export function getVoiceAgentSettings() {
   return {
     voice: els.voice.value,
@@ -54,15 +59,16 @@ export function updateUserPartialTranscript(text) {
   scrollTranscriptToBottom();
 }
 
-export function finalizeUserTranscript(text) {
+export function finalizeUserTranscript(text, meta) {
   if (userPartialElement) {
     userPartialElement.classList.remove("partial");
     userPartialElement.textContent = text;
+    appendBubbleMeta(userPartialElement, meta);
     userPartialElement = null;
     return;
   }
 
-  addBubble("user", text);
+  addBubble("user", text, meta);
 }
 
 export function resetUserPartialTranscript() {
@@ -87,15 +93,19 @@ export function ensureBubble(role, partial = false) {
 export function addBubble(role, text, meta) {
   const bubble = ensureBubble(role);
   bubble.textContent = text;
+  appendBubbleMeta(bubble, meta);
+  scrollTranscriptToBottom();
+}
 
-  if (meta) {
-    const metaElement = document.createElement("span");
-    metaElement.className = "meta";
-    metaElement.textContent = meta;
-    bubble.appendChild(metaElement);
+function appendBubbleMeta(bubble, meta) {
+  if (!meta) {
+    return;
   }
 
-  scrollTranscriptToBottom();
+  const metaElement = document.createElement("span");
+  metaElement.className = "meta";
+  metaElement.textContent = meta;
+  bubble.appendChild(metaElement);
 }
 
 export function showToolStatus(
@@ -165,9 +175,10 @@ export function clearToolStatus(sessionId, toolTurnId) {
   toolStatusTurnId = null;
 }
 
-export function bindControls(onConnect, onDisconnect) {
+export function bindControls(onConnect, onDisconnect, onResumeListening) {
   els.connect.addEventListener("click", onConnect);
   els.disconnect.addEventListener("click", onDisconnect);
+  els.resumeListening.addEventListener("click", onResumeListening);
   els.clear.addEventListener("click", clearTranscript);
 }
 

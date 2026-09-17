@@ -28,6 +28,22 @@ test("defines a no-argument cancel_current_work voice tool", () => {
   });
 });
 
+test("defines a no-argument pause_listening voice tool", () => {
+  const pauseTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "pause_listening"
+  );
+
+  assert.ok(pauseTool);
+  assert.deepEqual(pauseTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(pauseTool.description, /pause.*listening/i);
+  assert.match(pauseTool.description, /session connected/i);
+  assert.match(pauseTool.description, /standby/i);
+});
+
 test("defines a no-argument repeat_last_response voice tool", () => {
   const repeatTool = VOICE_TOOLS.find(
     (tool) => tool.name === "repeat_last_response"

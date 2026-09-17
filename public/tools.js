@@ -21,6 +21,26 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "pause_listening",
+
+    description:
+      "Use only when the user explicitly asks Offscreen to pause listening, stop " +
+      "listening, or go on standby. Enter standby mode while keeping the voice " +
+      "session connected. In standby, Offscreen should only handle requests to " +
+      "resume listening or disconnect.",
+
+    parameters: {
+      type: "object",
+
+      properties: {},
+
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
     name: "cancel_current_work",
 
     description:
