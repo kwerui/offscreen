@@ -12,6 +12,11 @@ Codex CLI to inspect the current project.
 ## Current features
 
 - Voice conversation through the AssemblyAI Voice Agent API.
+- Natural voice interruption: Voice Agent input uses `interrupt_response: true`,
+  so when a user begins a real interruption while Offscreen is speaking,
+  AssemblyAI marks the reply interrupted and Offscreen flushes queued browser
+  audio. Users can naturally say things such as “wait” or “stop”; this is
+  barge-in, not a dedicated Offscreen tool, and needs no second acknowledgement.
 - Explicit voice disconnect: ask Offscreen to end or disconnect the current
   session.
 - Explicit voice cancellation: ask Offscreen to cancel the current in-progress

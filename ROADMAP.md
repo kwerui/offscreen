@@ -22,6 +22,11 @@ Document and preserve the functionality already present:
   minted by the local Express server.
 - Microphone audio is converted to 24 kHz PCM and sent over the Voice Agent
   WebSocket; agent PCM audio is played in the browser.
+- Natural voice interruption (barge-in) uses Voice Agent input
+  `interrupt_response: true`: when a user begins a real interruption while
+  Offscreen is speaking, AssemblyAI marks the reply interrupted and Offscreen
+  flushes queued browser audio. Users can say things such as “wait” or “stop”;
+  this is not a dedicated Offscreen tool and needs no second acknowledgement.
 - The agent can open a small allowlisted set of websites in the browser.
 - The agent can query a read-only Google Calendar for named ranges and
   natural-language dates.
@@ -143,7 +148,6 @@ during cleanup work without a focused feature specification.
 ### Voice / session control
 
 - Stop listening.
-- Stop current speech.
 - Repeat the last response.
 - Shorten or summarize the last response.
 - Report the current activity or running tool by voice.
