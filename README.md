@@ -14,6 +14,8 @@ Codex CLI to inspect the current project.
 - Voice conversation through the AssemblyAI Voice Agent API.
 - Explicit voice disconnect: ask Offscreen to end or disconnect the current
   session.
+- Explicit voice cancellation: ask Offscreen to cancel the current in-progress
+  tool work. This keeps the voice session connected.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
@@ -25,8 +27,9 @@ Codex CLI to inspect the current project.
 - Calendar uses the Voice Agent tool setting `execution_mode: "hold"`; Codex
   inspection uses `execution_mode: "interactive"`.
 - Voice session and tool results are isolated with `sessionId` and
-  `toolTurnId`. When a newer user turn supersedes an interactive Codex call,
-  the browser explicitly resolves the original `call_id` as cancelled.
+  `toolTurnId`. When a newer user turn or an explicit cancellation supersedes
+  an interactive Codex call, the browser explicitly resolves the original
+  `call_id` as cancelled.
 
 Opening Gmail only opens the Gmail website. Offscreen does not read email.
 

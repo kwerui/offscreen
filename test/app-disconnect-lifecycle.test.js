@@ -178,11 +178,21 @@ test("sends a disconnect result before ending the session and reconnects normall
     thirdSocket.receive({ type: "session.ready", session_id: "third" });
 
     secondSocket.receive({ type: "reply.done", status: "completed" });
+    secondSocket.receive({
+      type: "tool.call",
+      name: "cancel_current_work",
+      call_id: "stale-cancel-call",
+      arguments: {},
+    });
+    secondSocket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
 
     assert.equal(thirdSocket.readyState, FakeWebSocket.OPEN);
     assert.deepEqual(thirdSocket.sentMessages.filter(
       (message) => message.type === "tool.result"
+    ), []);
+    assert.deepEqual(secondSocket.sentMessages.filter(
+      (message) => message.call_id === "stale-cancel-call"
     ), []);
   } finally {
     globalThis.fetch = originalFetch;

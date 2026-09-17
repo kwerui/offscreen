@@ -14,3 +14,16 @@ test("defines a no-argument disconnect_session voice tool", () => {
     required: [],
   });
 });
+
+test("defines a no-argument cancel_current_work voice tool", () => {
+  const cancelTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "cancel_current_work"
+  );
+
+  assert.ok(cancelTool);
+  assert.deepEqual(cancelTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+});

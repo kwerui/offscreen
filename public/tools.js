@@ -21,6 +21,25 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "cancel_current_work",
+
+    description:
+      "Cancel only the current in-progress tool work when the user explicitly " +
+      "asks to cancel the current task or stop what Offscreen is doing. Do not " +
+      "call this for casual mentions of cancel or stop.",
+
+    parameters: {
+      type: "object",
+
+      properties: {},
+
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
     name: "open_website",
 
     description:

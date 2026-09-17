@@ -96,6 +96,26 @@ function invalidateToolTurn() {
   clearToolStatus();
 }
 
+function cancelCurrentToolWork(sessionId, toolTurnId, callId) {
+  if (!isActiveToolTurn(sessionId, toolTurnId)) {
+    return;
+  }
+
+  // Send tracked Codex cancellations while their original turn is still valid.
+  codexCallTracker.cancelSupersededCalls(sessionId, toolTurnId);
+
+  // Advancing the turn drops queued and future results from all old tool work.
+  invalidateToolTurn();
+
+  // The cancellation tool itself acknowledges on the newly active turn.
+  toolResultCoordinator.queueResult(
+    sessionId,
+    activeToolTurnId,
+    callId,
+    { success: true, cancelled: true }
+  );
+}
+
 function endActiveSession(statusState = "", statusText = "Disconnected") {
   activeSessionId++;
   teardown(statusState, statusText);
@@ -365,6 +385,16 @@ async function handleToolCall(event, sessionId, toolTurnId) {
       event.call_id,
       { success: true, disconnected: true }
     );
+
+    return;
+  }
+
+  // ---------------------------------
+  // CANCEL CURRENT TOOL WORK
+  // ---------------------------------
+
+  if (event.name === "cancel_current_work") {
+    cancelCurrentToolWork(sessionId, toolTurnId, event.call_id);
 
     return;
   }

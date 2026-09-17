@@ -137,7 +137,7 @@ async function flushPromises() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("cancels an interrupted Codex turn after its finalized transcript and ignores its late completion", async () => {
+test("cancels current Codex work, ignores its late completion, and preserves transcript supersession", async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   const originalDocument = globalThis.document;
@@ -178,21 +178,35 @@ test("cancels an interrupted Codex turn after its finalized transcript and ignor
     });
     await flushPromises();
 
-    socket.receive({ type: "reply.done", status: "interrupted" });
-    socket.receive({ type: "transcript.user", text: "Do something else." });
+    socket.receive({
+      type: "tool.call",
+      name: "cancel_current_work",
+      call_id: "cancel-call",
+      arguments: {},
+    });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
 
     const cancellations = socket.sentMessages.filter(
       (message) => message.type === "tool.result"
     );
-    assert.deepEqual(cancellations, [{
-      type: "tool.result",
-      call_id: "original-codex-call",
-      result: JSON.stringify({
-        success: false,
-        cancelled: true,
-        error: "Superseded by a newer user request.",
-      }),
-    }]);
+    assert.deepEqual(cancellations, [
+      {
+        type: "tool.result",
+        call_id: "original-codex-call",
+        result: JSON.stringify({
+          success: false,
+          cancelled: true,
+          error: "Superseded by a newer user request.",
+        }),
+      },
+      {
+        type: "tool.result",
+        call_id: "cancel-call",
+        result: JSON.stringify({ success: true, cancelled: true }),
+      },
+    ]);
+    assert.equal(socket.readyState, FakeWebSocket.OPEN);
 
     firstCodexResponse.resolve({
       ok: true,
@@ -201,7 +215,7 @@ test("cancels an interrupted Codex turn after its finalized transcript and ignor
     await flushPromises();
 
     assert.equal(
-      socket.sentMessages.filter((message) => message.type === "tool.result").length,
+      socket.sentMessages.filter((message) => message.call_id === "original-codex-call").length,
       1
     );
 
@@ -224,6 +238,26 @@ test("cancels an interrupted Codex turn after its finalized transcript and ignor
         type: "tool.result",
         call_id: "new-codex-call",
         result: JSON.stringify({ success: true, output: "Current response." }),
+      }]
+    );
+
+    socket.receive({
+      type: "tool.call",
+      name: "cancel_current_work",
+      call_id: "no-work-cancel-call",
+      arguments: {},
+    });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    assert.deepEqual(
+      socket.sentMessages.filter(
+        (message) => message.call_id === "no-work-cancel-call"
+      ),
+      [{
+        type: "tool.result",
+        call_id: "no-work-cancel-call",
+        result: JSON.stringify({ success: true, cancelled: true }),
       }]
     );
 

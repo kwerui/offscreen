@@ -32,6 +32,8 @@ Document and preserve the functionality already present:
   such as while Codex is inspecting the project.
 - The agent can end the active voice session when the user explicitly asks to
   disconnect.
+- The agent can cancel current in-progress tool work when the user explicitly
+  asks, while keeping the voice session connected.
 
 Before refactoring, manually verify the exact demo flows that must remain
 unchanged: connect, speak, hear a reply, open a supported site, query Calendar,
@@ -142,7 +144,6 @@ during cleanup work without a focused feature specification.
 
 - Stop listening.
 - Stop current speech.
-- Cancel current work.
 - Repeat the last response.
 - Shorten or summarize the last response.
 - Report the current activity or running tool by voice.
