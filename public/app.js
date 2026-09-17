@@ -33,6 +33,8 @@ let activeToolTurnId = 0;
 
 const interruptedToolTurnIds = new Set();
 
+let pendingDisconnect;
+
 function isActiveSession(sessionId) {
   return sessionId === activeSessionId;
 }
@@ -89,6 +91,7 @@ const toolResultCoordinator = createToolResultCoordinator({
 
 function invalidateToolTurn() {
   activeToolTurnId++;
+  pendingDisconnect = null;
   toolResultCoordinator.reset();
   clearToolStatus();
 }
@@ -346,6 +349,27 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   console.log("Tool called:", event.name);
 
   // ---------------------------------
+  // DISCONNECT SESSION
+  // ---------------------------------
+
+  if (event.name === "disconnect_session") {
+    pendingDisconnect = {
+      sessionId,
+      toolTurnId,
+      callId: event.call_id,
+    };
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      { success: true, disconnected: true }
+    );
+
+    return;
+  }
+
+  // ---------------------------------
   // OPEN WEBSITE
   // ---------------------------------
 
@@ -435,11 +459,34 @@ function sendToolResult(
     return false;
   }
 
-  voiceSession.send({
+  const wasSent = voiceSession.send({
     type: "tool.result",
     call_id: callId,
     result: JSON.stringify(result),
   });
+
+  if (!wasSent) {
+    return false;
+  }
+
+  if (
+    pendingDisconnect?.sessionId === sessionId &&
+    pendingDisconnect.toolTurnId === toolTurnId &&
+    pendingDisconnect.callId === callId
+  ) {
+    const disconnectRequest = pendingDisconnect;
+
+    queueMicrotask(() => {
+      if (
+        pendingDisconnect !== disconnectRequest ||
+        !isActiveToolTurn(sessionId, toolTurnId)
+      ) {
+        return;
+      }
+
+      endActiveSession();
+    });
+  }
 
   return true;
 }

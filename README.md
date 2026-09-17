@@ -12,6 +12,8 @@ Codex CLI to inspect the current project.
 ## Current features
 
 - Voice conversation through the AssemblyAI Voice Agent API.
+- Explicit voice disconnect: ask Offscreen to end or disconnect the current
+  session.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,

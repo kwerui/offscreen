@@ -30,6 +30,8 @@ Document and preserve the functionality already present:
 - The browser displays connection status and user/agent transcripts.
 - The browser shows activity/status feedback during long-running tool calls,
   such as while Codex is inspecting the project.
+- The agent can end the active voice session when the user explicitly asks to
+  disconnect.
 
 Before refactoring, manually verify the exact demo flows that must remain
 unchanged: connect, speak, hear a reply, open a supported site, query Calendar,
@@ -138,7 +140,6 @@ during cleanup work without a focused feature specification.
 
 ### Voice / session control
 
-- Disconnect by voice.
 - Stop listening.
 - Stop current speech.
 - Cancel current work.

@@ -2,6 +2,25 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "disconnect_session",
+
+    description:
+      "End the current Offscreen voice session only when the user explicitly asks " +
+      "Offscreen to disconnect or end the session. Do not call this when the " +
+      "user merely mentions disconnecting in another context.",
+
+    parameters: {
+      type: "object",
+
+      properties: {},
+
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
     name: "open_website",
 
     description:
