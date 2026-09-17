@@ -31,6 +31,8 @@ import { createVoiceSession } from "./voice-session.js";
 
       let activeToolTurnId = 0;
 
+      const interruptedToolTurnIds = new Set();
+
       function isActiveSession(sessionId) {
         return sessionId === activeSessionId;
       }
@@ -50,7 +52,8 @@ import { createVoiceSession } from "./voice-session.js";
             sessionId,
             toolTurnId,
             callId,
-            result
+            result,
+            true
           );
 
           if (wasSent) {
@@ -297,6 +300,16 @@ import { createVoiceSession } from "./voice-session.js";
 
           case "transcript.user":
           if (event.text?.trim()) {
+            // An interrupted reply alone does not prove a newer request exists.
+            for (const interruptedToolTurnId of interruptedToolTurnIds) {
+              codexCallTracker.cancelSupersededCalls(
+                sessionId,
+                interruptedToolTurnId
+              );
+            }
+
+            interruptedToolTurnIds.clear();
+
             codexCallTracker.cancelSupersededCalls(
               sessionId,
               activeToolTurnId
@@ -361,6 +374,7 @@ import { createVoiceSession } from "./voice-session.js";
             ) {
               flushPlayback();
 
+              interruptedToolTurnIds.add(activeToolTurnId);
               invalidateToolTurn();
             } else {
               toolResultCoordinator.setReplyDone(true);
@@ -459,9 +473,17 @@ toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
       }
 
 
-      function sendToolResult(sessionId, toolTurnId, callId, result) {
+      function sendToolResult(
+        sessionId,
+        toolTurnId,
+        callId,
+        result,
+        allowSupersededToolTurn = false
+      ) {
         if (
-          !isActiveToolTurn(sessionId, toolTurnId) ||
+          (!allowSupersededToolTurn &&
+            !isActiveToolTurn(sessionId, toolTurnId)) ||
+          (allowSupersededToolTurn && !isActiveSession(sessionId)) ||
           !voiceSession.isOpen()
         ) {
           return false;
@@ -478,6 +500,7 @@ toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
 
       function teardown(statusState = "", statusText = "Disconnected") {
         invalidateToolTurn();
+        interruptedToolTurnIds.clear();
         codexCallTracker.clear();
 
         voiceSession.disconnect();
