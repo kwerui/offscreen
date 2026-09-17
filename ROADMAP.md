@@ -41,6 +41,8 @@ Document and preserve the functionality already present:
   asks, while keeping the voice session connected.
 - The agent can repeat its most recent completed spoken response when the user
   explicitly asks.
+- The agent can summarize or shorten its most recent completed spoken response
+  when the user explicitly asks.
 
 Before refactoring, manually verify the exact demo flows that must remain
 unchanged: connect, speak, hear a reply, open a supported site, query Calendar,
@@ -150,7 +152,6 @@ during cleanup work without a focused feature specification.
 ### Voice / session control
 
 - Stop listening.
-- Shorten or summarize the last response.
 - Report the current activity or running tool by voice.
 
 ### Developer workspace

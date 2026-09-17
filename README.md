@@ -23,6 +23,8 @@ Codex CLI to inspect the current project.
   tool work. This keeps the voice session connected.
 - Explicit voice repeat: ask Offscreen to repeat its most recent completed
   response.
+- Explicit voice summarize/shorten: ask Offscreen to summarize or shorten its
+  most recent completed response.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,

@@ -60,6 +60,26 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "summarize_last_response",
+
+    description:
+      "Use only when the user explicitly asks Offscreen to shorten, summarize, " +
+      "condense, give a TL;DR, or provide a shorter version of its most recent " +
+      "completed spoken response. Do not use this to repeat verbatim, summarize " +
+      "the user's words, explain an earlier response, or rerun any previous tool.",
+
+    parameters: {
+      type: "object",
+
+      properties: {},
+
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
     name: "open_website",
 
     description:

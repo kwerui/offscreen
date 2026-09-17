@@ -110,9 +110,17 @@ async function flushPromises() {
 }
 
 function repeatLastResponse(socket, callId) {
+  requestPreviousResponse(socket, "repeat_last_response", callId);
+}
+
+function summarizeLastResponse(socket, callId) {
+  requestPreviousResponse(socket, "summarize_last_response", callId);
+}
+
+function requestPreviousResponse(socket, toolName, callId) {
   socket.receive({
     type: "tool.call",
-    name: "repeat_last_response",
+    name: toolName,
     call_id: callId,
     arguments: {},
   });
@@ -172,6 +180,10 @@ test("repeats only the latest completed agent response and resets it between ses
       sessionUpdate.session.system_prompt,
       /ALWAYS call repeat_last_response rather than repeating from conversation memory/
     );
+    assert.match(
+      sessionUpdate.session.system_prompt,
+      /ALWAYS call summarize_last_response rather than summarizing from conversation memory/
+    );
 
     repeatLastResponse(firstSocket, "no-response-call");
     await flushPromises();
@@ -180,6 +192,13 @@ test("repeats only the latest completed agent response and resets it between ses
       error: "No completed Offscreen response is available in this session.",
     });
     assert.equal(fetchCount, 1);
+
+    summarizeLastResponse(firstSocket, "no-response-summary-call");
+    await flushPromises();
+    assert.deepEqual(findToolResult(firstSocket, "no-response-summary-call"), {
+      success: false,
+      error: "No completed Offscreen response is available in this session.",
+    });
 
     firstSocket.receive({
       type: "tool.call",
@@ -197,6 +216,24 @@ test("repeats only the latest completed agent response and resets it between ses
     repeatLastResponse(firstSocket, "response-a-call");
     await flushPromises();
     assert.deepEqual(findToolResult(firstSocket, "response-a-call"), {
+      success: true,
+      response: "Response A",
+    });
+
+    summarizeLastResponse(firstSocket, "response-a-summary-call");
+    await flushPromises();
+    assert.deepEqual(findToolResult(firstSocket, "response-a-summary-call"), {
+      success: true,
+      response: "Response A",
+    });
+    assert.equal(calendarRequestCount, 1);
+
+    firstSocket.receive({ type: "reply.started" });
+    firstSocket.receive({ type: "transcript.agent", text: "Summary B" });
+    firstSocket.receive({ type: "reply.done", status: "interrupted" });
+    summarizeLastResponse(firstSocket, "interrupted-summary-call");
+    await flushPromises();
+    assert.deepEqual(findToolResult(firstSocket, "interrupted-summary-call"), {
       success: true,
       response: "Response A",
     });
@@ -235,6 +272,23 @@ test("repeats only the latest completed agent response and resets it between ses
       response: "Response B",
     });
     assert.equal(calendarRequestCount, 1);
+
+    firstSocket.receive({ type: "reply.started" });
+    firstSocket.receive({ type: "transcript.agent", text: "Short Response B" });
+    firstSocket.receive({ type: "reply.done", status: "completed" });
+    summarizeLastResponse(firstSocket, "completed-summary-call");
+    await flushPromises();
+    assert.deepEqual(findToolResult(firstSocket, "completed-summary-call"), {
+      success: true,
+      response: "Short Response B",
+    });
+
+    repeatLastResponse(firstSocket, "completed-summary-repeat-call");
+    await flushPromises();
+    assert.deepEqual(findToolResult(firstSocket, "completed-summary-repeat-call"), {
+      success: true,
+      response: "Short Response B",
+    });
 
     await elements.get("connect").listeners.click();
     const secondSocket = FakeWebSocket.instances.at(-1);

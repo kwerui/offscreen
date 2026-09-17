@@ -46,7 +46,15 @@ const FIXED_OFFSCREEN_INSTRUCTIONS =
   "ALWAYS call repeat_last_response rather than repeating from conversation " +
   "memory. When repeat_last_response succeeds, speak the returned response " +
   "exactly, with no prefix, suffix, summary, paraphrase, or additional tool " +
-  "calls. When it fails, briefly state that no completed response is available.";
+  "calls. When it fails, briefly state that no completed response is available. " +
+  "When the user explicitly asks Offscreen to shorten, summarize, condense, give " +
+  "a TL;DR, or give a shorter version of its most recent response, ALWAYS call " +
+  "summarize_last_response rather than summarizing from conversation memory. " +
+  "When summarize_last_response succeeds, summarize or shorten only the returned " +
+  "response, preserve its key meaning, follow the user's requested degree and " +
+  "style of shortening, do not introduce unrelated information or call or rerun " +
+  "any other tool, and answer directly without a preface when possible. When it " +
+  "fails, briefly state that no completed response is available.";
 
 function isActiveSession(sessionId) {
   return sessionId === activeSessionId;
@@ -440,6 +448,28 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // ---------------------------------
 
   if (event.name === "repeat_last_response") {
+    const result = lastCompletedAgentResponse
+      ? { success: true, response: lastCompletedAgentResponse }
+      : {
+          success: false,
+          error: "No completed Offscreen response is available in this session.",
+        };
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      result
+    );
+
+    return;
+  }
+
+  // ---------------------------------
+  // SUMMARIZE LAST RESPONSE
+  // ---------------------------------
+
+  if (event.name === "summarize_last_response") {
     const result = lastCompletedAgentResponse
       ? { success: true, response: lastCompletedAgentResponse }
       : {

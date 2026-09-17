@@ -39,4 +39,20 @@ test("defines a no-argument repeat_last_response voice tool", () => {
     properties: {},
     required: [],
   });
+  assert.match(repeatTool.description, /repeat.*completed/i);
+});
+
+test("defines a no-argument summarize_last_response voice tool", () => {
+  const summarizeTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "summarize_last_response"
+  );
+
+  assert.ok(summarizeTool);
+  assert.deepEqual(summarizeTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(summarizeTool.description, /shorten|summarize/i);
+  assert.match(summarizeTool.description, /not.*rerun.*previous tool/i);
 });
