@@ -27,492 +27,438 @@ import { createCodexCallTracker } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
 
-      let activeSessionId = 0;
+let activeSessionId = 0;
 
-      let activeToolTurnId = 0;
+let activeToolTurnId = 0;
 
-      const interruptedToolTurnIds = new Set();
+const interruptedToolTurnIds = new Set();
 
-      function isActiveSession(sessionId) {
-        return sessionId === activeSessionId;
-      }
+function isActiveSession(sessionId) {
+  return sessionId === activeSessionId;
+}
 
-      function isActiveToolTurn(sessionId, toolTurnId) {
-        return (
-          isActiveSession(sessionId) &&
-          toolTurnId === activeToolTurnId
-        );
-      }
+function isActiveToolTurn(sessionId, toolTurnId) {
+  return (
+    isActiveSession(sessionId) && toolTurnId === activeToolTurnId
+  );
+}
 
-      const voiceSession = createVoiceSession();
+const voiceSession = createVoiceSession();
 
-      const codexCallTracker = createCodexCallTracker({
-        sendCancellationResult: (sessionId, toolTurnId, callId, result) => {
-          const wasSent = sendToolResult(
-            sessionId,
-            toolTurnId,
-            callId,
-            result,
-            true
-          );
+const codexCallTracker = createCodexCallTracker({
+  sendCancellationResult: (sessionId, toolTurnId, callId, result) => {
+    const wasSent = sendToolResult(
+      sessionId,
+      toolTurnId,
+      callId,
+      result,
+      true
+    );
 
-          if (wasSent) {
-            console.log("Superseded Codex tool cancelled");
-          }
+    if (wasSent) {
+      console.log("Superseded Codex tool cancelled");
+    }
 
-          return wasSent;
-        },
-      });
+    return wasSent;
+  },
+});
 
-      const toolResultCoordinator = createToolResultCoordinator({
-        isCurrent: isActiveToolTurn,
-        canSendResults: (sessionId, toolTurnId) => (
-          isActiveToolTurn(sessionId, toolTurnId) &&
-          voiceSession.isOpen()
-        ),
-        sendToolResult: (sessionId, toolTurnId, callId, result) => {
-          const wasSent = sendToolResult(
-            sessionId,
-            toolTurnId,
-            callId,
-            result
-          );
+const toolResultCoordinator = createToolResultCoordinator({
+  isCurrent: isActiveToolTurn,
+  canSendResults: (sessionId, toolTurnId) => (
+    isActiveToolTurn(sessionId, toolTurnId) && voiceSession.isOpen()
+  ),
+  sendToolResult: (sessionId, toolTurnId, callId, result) => {
+    const wasSent = sendToolResult(
+      sessionId,
+      toolTurnId,
+      callId,
+      result
+    );
 
-          if (wasSent) {
-            codexCallTracker.resolveCall(callId);
-          }
+    if (wasSent) {
+      codexCallTracker.resolveCall(callId);
+    }
 
-          return wasSent;
-        },
-        onFlush: (resultCount) => {
-          console.log(`Sending ${resultCount} tool result(s)`);
-        },
-      });
+    return wasSent;
+  },
+  onFlush: (resultCount) => {
+    console.log(`Sending ${resultCount} tool result(s)`);
+  },
+});
 
-      function invalidateToolTurn() {
-        activeToolTurnId++;
-        toolResultCoordinator.reset();
-        clearToolStatus();
-      }
+function invalidateToolTurn() {
+  activeToolTurnId++;
+  toolResultCoordinator.reset();
+  clearToolStatus();
+}
 
-      function endActiveSession(statusState = "", statusText = "Disconnected") {
-        activeSessionId++;
-        teardown(statusState, statusText);
-      }
+function endActiveSession(statusState = "", statusText = "Disconnected") {
+  activeSessionId++;
+  teardown(statusState, statusText);
+}
 
-      async function connect() {
-        const sessionId = activeSessionId + 1;
+async function connect() {
+  const sessionId = activeSessionId + 1;
 
-        if (voiceSession.hasConnection() || hasAudioResources()) {
-          activeSessionId = sessionId;
-          teardown();
-        } else {
-          activeSessionId = sessionId;
-        }
+  if (voiceSession.hasConnection() || hasAudioResources()) {
+    activeSessionId = sessionId;
+    teardown();
+  } else {
+    activeSessionId = sessionId;
+  }
 
-        setConnectButtonDisabled(true);
+  setConnectButtonDisabled(true);
 
-        setStatus(
-          "connecting",
-          "Requesting token…"
-        );
+  setStatus("connecting", "Requesting token…");
 
+  try {
+    await voiceSession.connect({
+      prepareConnection: async () => {
         try {
-          await voiceSession.connect({
-            prepareConnection: async () => {
-              try {
-                const audioWasSetUp = await setUpAudio({
-                  isSessionActive: () => isActiveSession(sessionId),
-                  onMicrophoneAudio: (audio) => {
-                    if (!isActiveSession(sessionId)) {
-                      return;
-                    }
-
-                    voiceSession.send({
-                      type: "input.audio",
-                      audio,
-                    });
-                  },
-                });
-
-                if (!audioWasSetUp) {
-                  return false;
-                }
-              } catch (err) {
-                if (!isActiveSession(sessionId)) {
-                  return false;
-                }
-
-                if (err.stage === "microphone") {
-                  console.error("Mic permission denied:", err.cause);
-                  endActiveSession("error", "Mic blocked");
-                } else {
-                  console.error("Audio setup error:", err.cause);
-                  endActiveSession("error", "Audio setup error");
-                }
-
-                return false;
-              }
-
-              setStatus(
-                "connecting",
-                "Connecting…"
-              );
-
-              return true;
-            },
-            onOpen: () => {
+          const audioWasSetUp = await setUpAudio({
+            isSessionActive: () => isActiveSession(sessionId),
+            onMicrophoneAudio: (audio) => {
               if (!isActiveSession(sessionId)) {
                 return;
               }
-
-              const now = new Date();
-
-              const today = [
-                now.getFullYear(),
-                String(
-                  now.getMonth() + 1
-                ).padStart(2, "0"),
-                String(
-                  now.getDate()
-                ).padStart(2, "0"),
-              ].join("-");
-
-              const voiceAgentSettings = getVoiceAgentSettings();
 
               voiceSession.send({
-                type: "session.update",
-
-                session: {
-                  system_prompt:
-                    voiceAgentSettings.prompt +
-                    `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
-
-                  greeting:
-                    voiceAgentSettings.greeting,
-
-                  input: {
-                    turn_detection: {
-                      vad_threshold: 0.5,
-                      min_silence: 1000,
-                      max_silence: 3000,
-                      interrupt_response: true,
-                    },
-                  },
-
-                  output: {
-                    voice:
-                      voiceAgentSettings.voice,
-                  },
-
-                  tools: VOICE_TOOLS,
-                },
+                type: "input.audio",
+                audio,
               });
             },
-            onEvent: (event) => handleEvent(event, sessionId),
-            onError: (err) => {
-              if (!isActiveSession(sessionId)) {
-                return;
-              }
-
-              console.error(
-                "WebSocket error:",
-                err
-              );
-
-              endActiveSession(
-                "error",
-                "Connection error"
-              );
-            },
-            onClose: (event) => {
-              if (!isActiveSession(sessionId)) {
-                return;
-              }
-
-              console.log(
-                "WebSocket closed:",
-                event.code
-              );
-
-              endActiveSession();
-            },
           });
+
+          if (!audioWasSetUp) {
+            return false;
+          }
         } catch (err) {
           if (!isActiveSession(sessionId)) {
-            return;
+            return false;
           }
 
-          if (err.stage === "token") {
-            console.error("Token request failed");
-            endActiveSession("error", "Token error");
+          if (err.stage === "microphone") {
+            console.error("Mic permission denied:", err.cause);
+            endActiveSession("error", "Mic blocked");
           } else {
-            console.error("WebSocket setup error:", err);
-            endActiveSession("error", "Connection error");
+            console.error("Audio setup error:", err.cause);
+            endActiveSession("error", "Audio setup error");
           }
+
+          return false;
         }
 
-      }
+        setStatus("connecting", "Connecting…");
 
-      function handleEvent(event, sessionId) {
+        return true;
+      },
+      onOpen: () => {
         if (!isActiveSession(sessionId)) {
           return;
         }
 
-        if (
-          event.type !==
-          "reply.audio"
-        ) {
-          console.log(
-            "AssemblyAI event:",
-            event.type
+        const now = new Date();
+
+        const today = [
+          now.getFullYear(),
+          String(now.getMonth() + 1).padStart(2, "0"),
+          String(now.getDate()).padStart(2, "0"),
+        ].join("-");
+
+        const voiceAgentSettings = getVoiceAgentSettings();
+
+        voiceSession.send({
+          type: "session.update",
+          session: {
+            system_prompt:
+              voiceAgentSettings.prompt +
+              `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
+
+            greeting: voiceAgentSettings.greeting,
+
+            input: {
+              turn_detection: {
+                vad_threshold: 0.5,
+                min_silence: 1000,
+                max_silence: 3000,
+                interrupt_response: true,
+              },
+            },
+
+            output: {
+              voice: voiceAgentSettings.voice,
+            },
+
+            tools: VOICE_TOOLS,
+          },
+        });
+      },
+      onEvent: (event) => handleEvent(event, sessionId),
+      onError: (err) => {
+        if (!isActiveSession(sessionId)) {
+          return;
+        }
+
+        console.error("WebSocket error:", err);
+        endActiveSession("error", "Connection error");
+      },
+      onClose: (event) => {
+        if (!isActiveSession(sessionId)) {
+          return;
+        }
+
+        console.log("WebSocket closed:", event.code);
+
+        endActiveSession();
+      },
+    });
+  } catch (err) {
+    if (!isActiveSession(sessionId)) {
+      return;
+    }
+
+    if (err.stage === "token") {
+      console.error("Token request failed");
+      endActiveSession("error", "Token error");
+    } else {
+      console.error("WebSocket setup error:", err);
+      endActiveSession("error", "Connection error");
+    }
+  }
+}
+
+function handleEvent(event, sessionId) {
+  if (!isActiveSession(sessionId)) {
+    return;
+  }
+
+  if (event.type !== "reply.audio") {
+    console.log("AssemblyAI event:", event.type);
+  }
+
+  switch (event.type) {
+    case "session.ready":
+      console.log("Voice session ready");
+
+      setStatus("connected", `Connected (${event.session_id})`);
+
+      setDisconnectButtonDisabled(false);
+
+      startMicrophoneCapture();
+
+      break;
+
+    case "session.updated":
+      console.log("Voice session updated");
+
+      break;
+
+    case "input.speech.started":
+      toolResultCoordinator.setReplyDone(false);
+      break;
+
+    case "transcript.user.delta":
+      updateUserPartialTranscript(event.text);
+
+      break;
+
+    case "transcript.user":
+      if (event.text?.trim()) {
+        // An interrupted reply alone does not prove a newer request exists.
+        for (const interruptedToolTurnId of interruptedToolTurnIds) {
+          codexCallTracker.cancelSupersededCalls(
+            sessionId,
+            interruptedToolTurnId
           );
         }
 
-        switch (event.type) {
-          case "session.ready":
-            console.log("Voice session ready");
+        interruptedToolTurnIds.clear();
 
-            setStatus(
-              "connected",
-              `Connected (${event.session_id})`
-            );
+        codexCallTracker.cancelSupersededCalls(sessionId, activeToolTurnId);
+        invalidateToolTurn();
+      }
 
-            setDisconnectButtonDisabled(false);
+      finalizeUserTranscript(event.text);
 
-            startMicrophoneCapture();
+      break;
 
-            break;
+    case "reply.started":
+      toolResultCoordinator.setReplyDone(false);
+      break;
 
-          case "session.updated":
-            console.log("Voice session updated");
+    case "reply.audio":
+      playPCM(event.data, () => isActiveSession(sessionId));
+      break;
 
-            break;
+    case "transcript.agent": {
+      const meta = event.interrupted ? "interrupted" : null;
 
-          case "input.speech.started":
-            toolResultCoordinator.setReplyDone(false);
-            break;
+      addBubble("agent", event.text, meta);
 
-          case "transcript.user.delta":
-            updateUserPartialTranscript(event.text);
+      break;
+    }
 
-            break;
+    case "tool.call":
+      const toolTurnId = activeToolTurnId;
 
-          case "transcript.user":
-          if (event.text?.trim()) {
-            // An interrupted reply alone does not prove a newer request exists.
-            for (const interruptedToolTurnId of interruptedToolTurnIds) {
-              codexCallTracker.cancelSupersededCalls(
-                sessionId,
-                interruptedToolTurnId
-              );
-            }
+      toolResultCoordinator.startTask();
 
-            interruptedToolTurnIds.clear();
-
-            codexCallTracker.cancelSupersededCalls(
-              sessionId,
-              activeToolTurnId
-            );
-    invalidateToolTurn();
-  }
-
-            finalizeUserTranscript(event.text);
-
-            break;
-
-          case "reply.started":
-            toolResultCoordinator.setReplyDone(false);
-            break;
-
-          case "reply.audio":
-            playPCM(
-              event.data,
-              () => isActiveSession(sessionId)
-            );
-            break;
-
-          case "transcript.agent": {
-            const meta =
-              event.interrupted
-                ? "interrupted"
-                : null;
-
-            addBubble(
-              "agent",
-              event.text,
-              meta
-            );
-
-            break;
+      handleToolCall(event, sessionId, toolTurnId)
+        .catch(() => {
+          console.error("Tool handler failed");
+        })
+        .finally(() => {
+          if (!isActiveToolTurn(sessionId, toolTurnId)) {
+            return;
           }
 
-          case "tool.call":  const toolTurnId = activeToolTurnId;
+          toolResultCoordinator.finishTask();
 
-  toolResultCoordinator.startTask();
-
-            handleToolCall(event, sessionId, toolTurnId)
-              .catch(() => {
-                console.error("Tool handler failed");
-              })
-              .finally(() => {
-                if (!isActiveToolTurn(sessionId, toolTurnId)) {
-                  return;
-                }
-
-                toolResultCoordinator.finishTask();
-
-                toolResultCoordinator.flush(sessionId, toolTurnId);
-              });
-
-            break;
-
-          case "reply.done":
-            if (
-              event.status ===
-              "interrupted"
-            ) {
-              flushPlayback();
-
-              interruptedToolTurnIds.add(activeToolTurnId);
-              invalidateToolTurn();
-            } else {
-              toolResultCoordinator.setReplyDone(true);
-
-              toolResultCoordinator.flush(sessionId, activeToolTurnId);
-            }
-
-            break;
-
-          case "session.error":
-            console.error(
-              "Session error:",
-              event.code
-            );
-
-            setStatus(
-              "error",
-              `${event.code}: ${event.message}`
-            );
-
-            break;
-        }
-      }
-
-      async function handleToolCall(
-        event,
-        sessionId,
-        toolTurnId
-      ) {
-        console.log(
-          "Tool called:",
-          event.name
-        );
-
-        // ---------------------------------
-        // OPEN WEBSITE
-        // ---------------------------------
-
-        if (
-          event.name ===
-          "open_website"
-        ) {
-          const result = openWebsite(event.arguments?.site);
-
-          toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
-
-          return;
-        }
-
-        // ---------------------------------
-        // GOOGLE CALENDAR
-        // ---------------------------------
-
-        if (event.name === "get_calendar_events") {
-          const result = await getCalendarEvents(event.arguments?.when);
-
-          toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
-
-          return;
-        }
-// ---------------------------------
-// CODEX
-// ---------------------------------
-
-if (event.name === "ask_codex") {
-  codexCallTracker.registerCall(sessionId, toolTurnId, event.call_id);
-
-  const task = event.arguments?.task;
-
-  if (task) {
-    showToolStatus(
-  "Codex is checking your project…",
-  sessionId,
-  toolTurnId,
-  isActiveToolTurn
-);
-  }
-
-  const result = await runCodexTask(task);
-  clearToolStatus(sessionId, toolTurnId);
-
-  toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
-
-  return;
-}
-
-// ---------------------------------
-// UNKNOWN TOOL
-// ---------------------------------
-
-toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
-  success: false,
-  error: `Unknown tool: ${event.name}`,
-});
-
-      }
-
-
-      function sendToolResult(
-        sessionId,
-        toolTurnId,
-        callId,
-        result,
-        allowSupersededToolTurn = false
-      ) {
-        if (
-          (!allowSupersededToolTurn &&
-            !isActiveToolTurn(sessionId, toolTurnId)) ||
-          (allowSupersededToolTurn && !isActiveSession(sessionId)) ||
-          !voiceSession.isOpen()
-        ) {
-          return false;
-        }
-
-        voiceSession.send({
-          type: "tool.result",
-          call_id: callId,
-          result: JSON.stringify(result),
+          toolResultCoordinator.flush(sessionId, toolTurnId);
         });
 
-        return true;
-      }
+      break;
 
-      function teardown(statusState = "", statusText = "Disconnected") {
+    case "reply.done":
+      if (event.status === "interrupted") {
+        flushPlayback();
+
+        interruptedToolTurnIds.add(activeToolTurnId);
         invalidateToolTurn();
-        interruptedToolTurnIds.clear();
-        codexCallTracker.clear();
+      } else {
+        toolResultCoordinator.setReplyDone(true);
 
-        voiceSession.disconnect();
-        tearDownAudio();
-        resetUserPartialTranscript();
-        setStatus(statusState, statusText);
-        setConnectButtonDisabled(false);
-        setDisconnectButtonDisabled(true);
+        toolResultCoordinator.flush(sessionId, activeToolTurnId);
       }
 
-      function disconnect() {
-        endActiveSession();
-      }
+      break;
 
-      bindControls(connect, disconnect);
+    case "session.error":
+      console.error("Session error:", event.code);
+      setStatus("error", `${event.code}: ${event.message}`);
+
+      break;
+  }
+}
+
+async function handleToolCall(event, sessionId, toolTurnId) {
+  console.log("Tool called:", event.name);
+
+  // ---------------------------------
+  // OPEN WEBSITE
+  // ---------------------------------
+
+  if (event.name === "open_website") {
+    const result = openWebsite(event.arguments?.site);
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      result
+    );
+
+    return;
+  }
+
+  // ---------------------------------
+  // GOOGLE CALENDAR
+  // ---------------------------------
+
+  if (event.name === "get_calendar_events") {
+    const result = await getCalendarEvents(event.arguments?.when);
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      result
+    );
+
+    return;
+  }
+
+  // ---------------------------------
+  // CODEX
+  // ---------------------------------
+
+  if (event.name === "ask_codex") {
+    codexCallTracker.registerCall(sessionId, toolTurnId, event.call_id);
+
+    const task = event.arguments?.task;
+
+    if (task) {
+      showToolStatus(
+        "Codex is checking your project…",
+        sessionId,
+        toolTurnId,
+        isActiveToolTurn
+      );
+    }
+
+    const result = await runCodexTask(task);
+    clearToolStatus(sessionId, toolTurnId);
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      result
+    );
+
+    return;
+  }
+
+  // ---------------------------------
+  // UNKNOWN TOOL
+  // ---------------------------------
+
+  toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, {
+    success: false,
+    error: `Unknown tool: ${event.name}`,
+  });
+}
+
+function sendToolResult(
+  sessionId,
+  toolTurnId,
+  callId,
+  result,
+  allowSupersededToolTurn = false
+) {
+  if (
+    (!allowSupersededToolTurn && !isActiveToolTurn(sessionId, toolTurnId)) ||
+    (allowSupersededToolTurn && !isActiveSession(sessionId)) ||
+    !voiceSession.isOpen()
+  ) {
+    return false;
+  }
+
+  voiceSession.send({
+    type: "tool.result",
+    call_id: callId,
+    result: JSON.stringify(result),
+  });
+
+  return true;
+}
+
+function teardown(statusState = "", statusText = "Disconnected") {
+  invalidateToolTurn();
+  interruptedToolTurnIds.clear();
+  codexCallTracker.clear();
+
+  voiceSession.disconnect();
+  tearDownAudio();
+  resetUserPartialTranscript();
+  setStatus(statusState, statusText);
+  setConnectButtonDisabled(false);
+  setDisconnectButtonDisabled(true);
+}
+
+function disconnect() {
+  endActiveSession();
+}
+
+bindControls(connect, disconnect);

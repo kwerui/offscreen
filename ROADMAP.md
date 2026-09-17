@@ -122,27 +122,11 @@ redesign.
 **Priority: BEFORE SUBMISSION only if Phases 1–4 are stable; otherwise LATER.
 Depends on Phase 2.**
 
-`public/app.js` currently contains too many responsibilities. Gradually
-separate the current browser code into native ES modules without introducing
-React, a bundler, or a state-management library:
-
-- static HTML;
-- CSS;
-- UI rendering;
-- audio capture and playback;
-- AssemblyAI/session lifecycle and turn coordination;
-- individual browser tool handlers.
-
-For example, this may become `index.html`, `styles.css`, `ui.js`, `audio.js`,
-`voice-session.js`, `tools.js`, and the existing `app.js` entry point.
-`styles.css`, `ui.js`, `audio.js`, `tools.js`, `website-tool.js`, and `app.js`
-now exist. Tool definitions are in `tools.js`; supported website execution is in
-`website-tool.js`; Calendar execution is in `calendar-tool.js`; Codex HTTP
-execution is in `codex-tool.js`; generic tool-result queue/task coordination is
-in `tool-result-coordinator.js`. Codex interactive-call tracking and
-supersession/cancellation are in `codex-call-tracker.js`; AssemblyAI transport
-connection lifecycle is in `voice-session.js`; tool-turn ownership and the
-decision to supersede a turn remain in `app.js`.
+The structural frontend refactor is complete. `public/app.js` intentionally
+remains the application orchestrator. Transport, audio, UI, tool
+implementations, generic result coordination, and Codex-call tracking already
+live in focused modules. No further extraction is currently planned unless a
+future feature creates a clear independent responsibility.
 
 ## Phase 6 — Planned product work
 
