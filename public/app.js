@@ -35,6 +35,19 @@ const interruptedToolTurnIds = new Set();
 
 let pendingDisconnect;
 
+let lastCompletedAgentResponse = null;
+
+let pendingAgentResponse = null;
+
+let isAgentReplyOpen = false;
+
+const FIXED_OFFSCREEN_INSTRUCTIONS =
+  "When the user explicitly asks Offscreen to repeat its most recent response, " +
+  "ALWAYS call repeat_last_response rather than repeating from conversation " +
+  "memory. When repeat_last_response succeeds, speak the returned response " +
+  "exactly, with no prefix, suffix, summary, paraphrase, or additional tool " +
+  "calls. When it fails, briefly state that no completed response is available.";
+
 function isActiveSession(sessionId) {
   return sessionId === activeSessionId;
 }
@@ -96,6 +109,12 @@ function invalidateToolTurn() {
   clearToolStatus();
 }
 
+function resetStoredAgentResponses() {
+  lastCompletedAgentResponse = null;
+  pendingAgentResponse = null;
+  isAgentReplyOpen = false;
+}
+
 function cancelCurrentToolWork(sessionId, toolTurnId, callId) {
   if (!isActiveToolTurn(sessionId, toolTurnId)) {
     return;
@@ -123,6 +142,8 @@ function endActiveSession(statusState = "", statusText = "Disconnected") {
 
 async function connect() {
   const sessionId = activeSessionId + 1;
+
+  resetStoredAgentResponses();
 
   if (voiceSession.hasConnection() || hasAudioResources()) {
     activeSessionId = sessionId;
@@ -196,6 +217,7 @@ async function connect() {
           session: {
             system_prompt:
               voiceAgentSettings.prompt +
+              `\n\n${FIXED_OFFSCREEN_INSTRUCTIONS}` +
               `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`,
 
             greeting: voiceAgentSettings.greeting,
@@ -308,6 +330,8 @@ function handleEvent(event, sessionId) {
 
     case "reply.started":
       toolResultCoordinator.setReplyDone(false);
+      isAgentReplyOpen = true;
+      pendingAgentResponse = null;
       break;
 
     case "reply.audio":
@@ -318,6 +342,10 @@ function handleEvent(event, sessionId) {
       const meta = event.interrupted ? "interrupted" : null;
 
       addBubble("agent", event.text, meta);
+
+      if (isAgentReplyOpen && !event.interrupted && event.text?.trim()) {
+        pendingAgentResponse = event.text;
+      }
 
       break;
     }
@@ -344,12 +372,20 @@ function handleEvent(event, sessionId) {
       break;
 
     case "reply.done":
+      isAgentReplyOpen = false;
+
       if (event.status === "interrupted") {
+        pendingAgentResponse = null;
         flushPlayback();
 
         interruptedToolTurnIds.add(activeToolTurnId);
         invalidateToolTurn();
       } else {
+        if (pendingAgentResponse?.trim()) {
+          lastCompletedAgentResponse = pendingAgentResponse;
+        }
+
+        pendingAgentResponse = null;
         toolResultCoordinator.setReplyDone(true);
 
         toolResultCoordinator.flush(sessionId, activeToolTurnId);
@@ -395,6 +431,28 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
   if (event.name === "cancel_current_work") {
     cancelCurrentToolWork(sessionId, toolTurnId, event.call_id);
+
+    return;
+  }
+
+  // ---------------------------------
+  // REPEAT LAST RESPONSE
+  // ---------------------------------
+
+  if (event.name === "repeat_last_response") {
+    const result = lastCompletedAgentResponse
+      ? { success: true, response: lastCompletedAgentResponse }
+      : {
+          success: false,
+          error: "No completed Offscreen response is available in this session.",
+        };
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      result
+    );
 
     return;
   }
@@ -525,6 +583,7 @@ function teardown(statusState = "", statusText = "Disconnected") {
   invalidateToolTurn();
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
+  resetStoredAgentResponses();
 
   voiceSession.disconnect();
   tearDownAudio();

@@ -21,6 +21,8 @@ Codex CLI to inspect the current project.
   session.
 - Explicit voice cancellation: ask Offscreen to cancel the current in-progress
   tool work. This keeps the voice session connected.
+- Explicit voice repeat: ask Offscreen to repeat its most recent completed
+  response.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,

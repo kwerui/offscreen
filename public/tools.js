@@ -40,6 +40,26 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "repeat_last_response",
+
+    description:
+      "Use only when the user explicitly asks Offscreen to repeat its most " +
+      "recent completed spoken response, such as 'repeat that', 'say that " +
+      "again', or 'what did you just say'. Do not repeat the user's words, " +
+      "explain or summarize an earlier response, or rerun any previous tool.",
+
+    parameters: {
+      type: "object",
+
+      properties: {},
+
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
     name: "open_website",
 
     description:

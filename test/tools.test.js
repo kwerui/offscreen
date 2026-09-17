@@ -27,3 +27,16 @@ test("defines a no-argument cancel_current_work voice tool", () => {
     required: [],
   });
 });
+
+test("defines a no-argument repeat_last_response voice tool", () => {
+  const repeatTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "repeat_last_response"
+  );
+
+  assert.ok(repeatTool);
+  assert.deepEqual(repeatTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+});

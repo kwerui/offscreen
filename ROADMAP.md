@@ -39,6 +39,8 @@ Document and preserve the functionality already present:
   disconnect.
 - The agent can cancel current in-progress tool work when the user explicitly
   asks, while keeping the voice session connected.
+- The agent can repeat its most recent completed spoken response when the user
+  explicitly asks.
 
 Before refactoring, manually verify the exact demo flows that must remain
 unchanged: connect, speak, hear a reply, open a supported site, query Calendar,
@@ -148,7 +150,6 @@ during cleanup work without a focused feature specification.
 ### Voice / session control
 
 - Stop listening.
-- Repeat the last response.
 - Shorten or summarize the last response.
 - Report the current activity or running tool by voice.
 
