@@ -111,7 +111,7 @@ working voice flow.
 
 ### Requirements
 
-- Node.js 18 or newer and npm
+- Node.js 20 or newer and npm
 - An AssemblyAI API key
 - A Google Cloud project with the Google Calendar API enabled
 - Google OAuth desktop-client credentials

@@ -6,7 +6,7 @@ document do not exist yet.
 
 ## Prerequisites
 
-- Node.js 18 or newer (the project declares this minimum version).
+- Node.js 20 or newer (the Playwright MCP dependency requires this minimum).
 - npm.
 - An AssemblyAI account and API key for Voice Agent access.
 - A Google Cloud project with Google Calendar API access for Calendar queries.
@@ -129,6 +129,9 @@ matching implementation:
   Google Calendar with server-side OAuth.
 - `ask_codex` calls the local Codex route, which starts the local read-only
   Codex CLI.
+- `browser_navigate`, `browser_read_page`, `browser_find_on_page`, and
+  `browser_go_back` call the local browser route. Its backend adapter owns a
+  lazy, reused Playwright MCP connection and exposes only those four actions.
 
 The browser packages the outcome as a `tool.result` message for AssemblyAI.
 AssemblyAI then uses that result to speak its answer.
@@ -205,6 +208,30 @@ security-sensitive integration, stop and get explicit approval.
 
 MCP is an integration mechanism, not permission to expose an entire server's
 tool catalog to AssemblyAI.
+
+### First browser MCP increment
+
+The initial Playwright MCP integration runs the locally installed
+`@playwright/mcp` server lazily in a headless, isolated context. It permits
+only explicit http/https navigation, page accessibility snapshots, literal
+text finding, and browser history back. It does not permit clicks, typing,
+forms, arbitrary evaluation, downloads, uploads, or arbitrary MCP forwarding.
+
+Install Playwright's managed Chromium before a live browser run:
+
+```bash
+npx playwright install chromium
+```
+
+Treat page and MCP output as untrusted text. For live verification, test a
+valid navigation, a rejected `file:` URL, a snapshot, text finding, back
+navigation, an MCP startup failure, and a late result after disconnect or turn
+supersession.
+
+These tools use `execution_mode: "hold"`. A superseded turn or disconnected
+session ignores its late browser result through the existing session/turn
+guards; this first increment does not terminate an already-running Playwright
+MCP operation when the user cancels work.
 
 1. Write a focused feature specification and choose one user-visible,
    bounded capability.

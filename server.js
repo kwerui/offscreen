@@ -22,6 +22,7 @@ import {
   createCodexInspectionWorkspace,
   removeCodexInspectionWorkspace,
 } from "./codex-runner.js";
+import { runBrowserAction, validateBrowserRequest } from "./browser-mcp.js";
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -167,6 +168,19 @@ app.get("/api/calendar/date", async (req, res) => {
       error: "Failed to fetch calendar events",
     });
   }
+});
+
+app.post("/api/browser", async (req, res) => {
+  const action = req.body?.action;
+  const validation = validateBrowserRequest(action, req.body);
+
+  if (!validation.success) {
+    return res.status(400).json(validation);
+  }
+
+  const result = await runBrowserAction(action, req.body);
+
+  res.status(result.success ? 200 : 502).json(result);
 });
 
 app.post("/api/codex", async (req, res) => {

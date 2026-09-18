@@ -25,6 +25,7 @@ confirmation, and normalized results.
 
 ```text
 server.js                 Express server and backend API routes
+browser-mcp.js            Bounded Playwright MCP client adapter
 calendar.js               Google Calendar authentication and queries
 calendar-query.js         Deterministic Calendar query interpretation
 test/calendar-query.test.js  Node tests for Calendar query interpretation
@@ -43,6 +44,7 @@ public/
   website-tool.js         Supported website execution
   calendar-tool.js        Calendar HTTP execution
   codex-tool.js           Codex HTTP execution
+  browser-tool.js         Browser MCP HTTP execution
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
@@ -62,6 +64,8 @@ from the server environment. It currently owns several different concerns:
 - the Calendar query route validates input, calls `calendar-query.js`, and
   chooses the appropriate Calendar query;
 - `POST /api/codex` starts a local read-only Codex CLI process;
+- `POST /api/browser` validates one of four bounded browser actions and calls
+  `browser-mcp.js`;
 - static-file serving and server startup.
 
 The file is an entry point, but it has grown beyond simple application assembly.
@@ -116,6 +120,20 @@ calls the local Codex endpoint, and returns its existing success or failure
 tool-result data. It does not know about AssemblyAI events, interactive-call
 tracking, supersession/cancellation, sessions, tool turns, or result queues.
 
+`browser-tool.js` owns browser-side HTTP execution for the four bounded
+browser actions. It calls the local browser endpoint and returns normalized
+results; it does not know about MCP, AssemblyAI sessions, tool turns, or result
+queues.
+
+### `browser-mcp.js`
+
+`browser-mcp.js` owns the backend Playwright MCP connection. It starts the
+locally installed Playwright MCP server lazily in a headless, isolated context,
+reuses the connection, verifies its required tools at startup, and maps only
+`navigate`, `snapshot`, `find`, and `back`. It accepts only http/https
+navigation, bounds output, and normalizes MCP failures. It never forwards an
+arbitrary MCP tool name or arguments.
+
 `codex-call-tracker.js` owns unresolved interactive Codex call bookkeeping and
 explicit cancellation of calls from a superseded session/turn. It receives a
 callback from `app.js` to send cancellation results, so it does not own the
@@ -132,6 +150,7 @@ does not own the WebSocket, session lifecycle, a tool implementation, or UI.
 - tool-call identification and execution dispatch;
 - Codex tool-call identification, session/turn checks, and the decision to
   supersede an earlier user turn;
+- bounded browser tool-call identification and activity descriptions;
 - website and Calendar tool-call identification;
 - client-owned descriptions of currently running Calendar/Codex work for
   non-superseding voice status questions;
@@ -183,6 +202,8 @@ Microphone
             → Google Calendar API
        → ask_codex: browser calls local Codex API
             → read-only local Codex CLI
+       → browser_*: browser calls local browser API
+            → bounded Playwright MCP adapter
   → browser queues tool.result
   → browser sends tool.result to AssemblyAI
   → AssemblyAI sends spoken reply PCM and transcript

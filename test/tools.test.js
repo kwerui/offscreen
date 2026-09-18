@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { VOICE_TOOLS } from "../public/tools.js";
 
+test("defines the four bounded browser voice tools", () => {
+  const browserTools = [
+    ["browser_navigate", ["url"]],
+    ["browser_read_page", []],
+    ["browser_find_on_page", ["text"]],
+    ["browser_go_back", []],
+  ];
+
+  for (const [name, required] of browserTools) {
+    const tool = VOICE_TOOLS.find((candidate) => candidate.name === name);
+    assert.ok(tool, `${name} should be defined`);
+    assert.deepEqual(tool.parameters.required, required);
+    assert.equal(tool.execution_mode, "hold");
+  }
+});
+
 test("defines a no-argument disconnect_session voice tool", () => {
   const disconnectTool = VOICE_TOOLS.find(
     (tool) => tool.name === "disconnect_session"

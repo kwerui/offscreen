@@ -26,6 +26,7 @@ import { VOICE_TOOLS } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { runCodexTask } from "./codex-tool.js";
+import { runBrowserTool } from "./browser-tool.js";
 import { createCodexCallTracker } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
@@ -821,6 +822,61 @@ async function handleToolCall(event, sessionId, toolTurnId) {
       event.call_id,
       result
     );
+
+    return;
+  }
+
+  // ---------------------------------
+  // BROWSER
+  // ---------------------------------
+
+  const browserActions = {
+    browser_navigate: {
+      action: "navigate",
+      input: { url: event.arguments?.url },
+      activity: "Navigating the browser.",
+    },
+    browser_read_page: {
+      action: "snapshot",
+      input: {},
+      activity: "Reading the current browser page.",
+    },
+    browser_find_on_page: {
+      action: "find",
+      input: { text: event.arguments?.text },
+      activity: "Finding text on the current browser page.",
+    },
+    browser_go_back: {
+      action: "back",
+      input: {},
+      activity: "Going back in the browser.",
+    },
+  };
+  const browserAction = browserActions[event.name];
+
+  if (browserAction) {
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      browserAction.activity
+    );
+
+    try {
+      const result = await runBrowserTool(
+        browserAction.action,
+        browserAction.input
+      );
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
 
     return;
   }
