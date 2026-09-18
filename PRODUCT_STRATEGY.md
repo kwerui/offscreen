@@ -30,21 +30,29 @@ state and safety. Tools perform actions.**
 
 ## Demo domains and decision rule
 
-The primary demo domains are bounded browser automation, a deterministic
-developer workspace, and read-only Calendar productivity. Prefer deterministic
-tools for deterministic tasks (Git status, file search, known tests, validated
-VS Code opening); reserve Codex for reasoning such as diagnosis or architecture
-analysis. Gmail, tasks, notes, and reminders are lower priority.
+Offscreen differentiates through multi-step, eyes-free computer work: stateful
+contextual follow-up across browser, developer, and productivity workflows. It
+is not merely a way to answer questions or open apps. The P0 demo domains are a
+deterministic developer workspace, contextual follow-ups, read-only Gmail, and
+higher-level web research built on the existing controlled browser foundation,
+alongside read-only Calendar productivity.
+
+Prefer deterministic tools for deterministic tasks (Git status, file search,
+known tests, and validated VS Code opening); reserve Codex for reasoning such
+as diagnosis or architecture analysis. Gmail is a current product-plan priority
+for read-only message and thread workflows. Tasks, notes, reminders, email
+writes, and other write actions remain later work and require explicit approval
+when they expand permissions or consequences.
 
 Every remaining task must make Offscreen more differentiated, make the demo
 more reliable, or make the submission stronger. A few coherent, dependable
 workflows beat a large collection of shallow tools.
 
-Target demo: wake Offscreen; start developer work; use browser automation while
-it runs; ask “What are you doing?” without cancellation; make a contextual
-follow-up; demonstrate interruption or standby/resume; receive completion; and
-disconnect. Do not fake concurrency—narrow the demo if the lifecycle cannot
-safely support it.
+Target demo: wake Offscreen; begin developer work; research in the controlled
+browser while it runs; check Calendar or Gmail; ask “What are you doing?”
+without cancellation; make a contextual follow-up; demonstrate interruption or
+standby/resume; receive completion; and disconnect. Do not fake
+concurrency—narrow the demo if the lifecycle cannot safely support it.
 
 ## Positioning and non-goals
 
@@ -60,10 +68,13 @@ Codex CLI.
 
 ## Submission strategy
 
-Deployment and a public demo are P0. The submission needs a title, short and
-long descriptions, tags, cover image, video, slides, public GitHub repository,
-demo platform, and application URL. Treat each as product work; validate claims
-against the actual deployed capability rather than local assumptions.
+Build the P0 workflows before deployment consumes feature-building time.
+Hosted-safe capability separation already exists, but it does not make hosted
+public browser automation complete. Once the core workflows are strong, prepare
+deployment security and configuration, then validate the application URL and
+every public claim against the actual deployed capability. Submission assets
+(title, descriptions, tags, cover image, video, slides, screenshots, public
+repository, and application URL) follow as P2 work.
 
 ## Execution roles
 

@@ -19,6 +19,15 @@ Document and preserve the functionality already present:
   flushes queued browser audio. Users can say things such as “wait” or “stop”;
   this is not a dedicated Offscreen tool and needs no second acknowledgement.
 - The agent can open a small allowlisted set of websites in the browser.
+- Bounded browser navigation, page reading, text finding, and back navigation
+  are implemented through the controlled browser adapter.
+- Safe browser click and type actions are implemented only against observed
+  page references; typing never submits.
+- Consequential browser actions require explicit confirmation immediately
+  before the stored action executes.
+- Local and hosted-safe capability surfaces are separated. `HOSTED_DEMO` does
+  not expose local-only capabilities; this does not mean hosted public browser
+  automation is finished.
 - The agent can query a read-only Google Calendar for named ranges and
   natural-language dates.
 - The agent can ask a locally installed Codex CLI to inspect the local project
@@ -51,58 +60,72 @@ Codex cancellation with its original `call_id`, and tool-result coordination.
 Do not reintroduce `get_current_activity` or `stop_current_speech` tools:
 activity is client-owned context and natural AssemblyAI barge-in is intentional.
 
-## P0 — Submission-critical
+## P0 — Core standout workflows
 
-### Hosted/demo architecture
+### 1. Deterministic developer workspace
 
-Why: a public demo cannot inherit local loopback binding, desktop OAuth, and a
-local Codex CLI without an explicit hosted-safe design. Acceptance: document
-hosted versus local-only capabilities, deploy only supported capabilities, and
-verify the public application URL.
+Build read-only Git status and changed-file inspection, bounded project file
+search and read, a configured test command, structured test-failure summaries,
+and validated VS Code project/file opening. Never permit arbitrary spoken shell
+execution. Use Codex only for reasoning handoffs such as “why did this fail?”
 
-### Bounded browser automation through MCP
+### 2. Contextual follow-ups
 
-Why: real browser work is the next clearest differentiator. Demo: navigate and
-act on a bounded target while developer work runs. Security: adapters validate
-inputs and require confirmation for consequential actions. Acceptance: no raw
-MCP catalog reaches AssemblyAI; success, failure, cancellation, and stale
-completion paths are verified.
+Support bounded references such as “open that file,” “which test failed?,” “run
+those tests again,” and “read that result.” References must expire or clear
+safely when stale, and stale session or tool state must not mutate active work.
 
-### Confirmation policy and public readiness
+### 3. Gmail read-only
 
-Why: safety and credible submission claims are product requirements.
-Acceptance: confirmation occurs immediately before destructive/external actions;
-repository, demo, and public claims are reviewed against reality.
+Add recent, unread, and important message listing; sender, subject, and basic
+query search; message/thread reading; and thread summaries. Do not add send,
+reply, delete, archive, or other write actions. Do not broaden OAuth scopes
+beyond read-only without explicit approval.
 
-## P1 — Standout developer workflow
+### 4. Higher-level web research
 
-Build read-only Git status/changed files, project-contained file read/search,
-a configured test command with failure summary, and validated VS Code opening.
-Use Codex only for reasoning handoff such as “why did this fail?” Add bounded,
-clearable contextual references. Never permit arbitrary spoken shell commands.
+Build on the existing controlled browser foundation to search the web, inspect
+results, and open/read relevant results. Support bounded references such as
+“open the second result.” Do not claim arbitrary-site reliability.
 
-Acceptance: deterministic operations use deterministic tools; every target is
-validated; failures are normalized; lifecycle and confirmation boundaries are
-tested and manually exercised where applicable.
+### 5. Combined standout workflow
 
-## P1 — Standout combined demo
+Combine developer tools, browser research, Calendar, Gmail, and contextual
+follow-ups into one continuous eyes-free work session. Activity questions must
+not cancel long-running work. Demonstrate concurrency only where lifecycle
+safety supports it.
 
-Combine browser and developer work with non-superseding activity questions,
-interruption or standby, contextual follow-up, and completion. Acceptance: the
-demo is real—concurrency is demonstrated only if lifecycle safety supports it.
+Acceptance for P0: deterministic operations use deterministic tools; all
+targets and references are bounded and validated; failures are normalized; and
+lifecycle, stale-state, cancellation, and confirmation boundaries are tested
+and manually exercised where applicable.
 
-## P2 — Submission and presentation
+## P1 — Reliability and demo polish
 
-Prepare GitHub polish, title, short/long description, tags, cover, video,
-slides, screenshots, architecture visual, application URL, and rehearsal.
-Acceptance: assets match current functionality and the full demo is rehearsed
-with real voice/device/integration conditions.
+Perform end-to-end manual demo verification, exercise failure and retry
+behavior, stale-state safety, cancellation, confirmation, interruption,
+standby/resume, and demo rehearsal.
 
-## P3 — Only after core is strong
+## P1 — Deployment
 
-Evaluate Chrome DevTools MCP, Gmail read-only, tasks/notes/reminders, combined
-briefing, and guarded writes. Each requires a focused specification and, for
-new permissions or writes, explicit approval.
+Hosted-safe mode already exists. After the P0 workflows are strong, complete
+token and public-HTTP security, deployment configuration, and application URL
+verification. Add bounded hosted browser capability only if time and safety
+allow. Do not represent the existing local controlled browser as finished
+hosted public browser automation.
+
+## P2 — Submission assets
+
+Prepare README polish, video, slides, cover image, screenshots,
+title/descriptions/tags, public repository/default branch, and final
+application URL. Acceptance: assets and public claims match the actual product,
+and the full demo is rehearsed with real voice/device/integration conditions.
+
+## P3 — Optional after core is strong
+
+Consider write actions, send/reply email, task/reminder writes, broader browser
+permissions, Chrome DevTools MCP, and other integrations. Each requires a
+focused specification and, for new permissions or writes, explicit approval.
 
 ## Feature specification template
 
