@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { VOICE_TOOLS } from "../public/tools.js";
 
-test("defines the four bounded browser voice tools", () => {
+test("defines the six bounded browser voice tools", () => {
   const browserTools = [
     ["browser_navigate", ["url"]],
     ["browser_read_page", []],
     ["browser_find_on_page", ["text"]],
     ["browser_go_back", []],
+    ["browser_click", ["target"]],
+    ["browser_type", ["target", "text"]],
   ];
 
   for (const [name, required] of browserTools) {
@@ -16,6 +18,17 @@ test("defines the four bounded browser voice tools", () => {
     assert.deepEqual(tool.parameters.required, required);
     assert.equal(tool.execution_mode, "hold");
   }
+});
+
+test("describes safe ref-only browser interaction", () => {
+  const clickTool = VOICE_TOOLS.find((tool) => tool.name === "browser_click");
+  const typeTool = VOICE_TOOLS.find((tool) => tool.name === "browser_type");
+
+  assert.match(clickTool.description, /ref.*browser_read_page|browser_read_page.*ref/i);
+  assert.match(clickTool.description, /consequential.*unavailable|unavailable.*confirmation/i);
+  assert.match(clickTool.description, /never repeat.*failed click.*refreshed/i);
+  assert.match(typeTool.description, /never submits/i);
+  assert.match(typeTool.description, /not editable.*read or find/i);
 });
 
 test("defines a no-argument disconnect_session voice tool", () => {

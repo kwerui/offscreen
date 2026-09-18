@@ -64,7 +64,7 @@ from the server environment. It currently owns several different concerns:
 - the Calendar query route validates input, calls `calendar-query.js`, and
   chooses the appropriate Calendar query;
 - `POST /api/codex` starts a local read-only Codex CLI process;
-- `POST /api/browser` validates one of four bounded browser actions and calls
+- `POST /api/browser` validates one of six bounded browser actions and calls
   `browser-mcp.js`;
 - static-file serving and server startup.
 
@@ -120,7 +120,7 @@ calls the local Codex endpoint, and returns its existing success or failure
 tool-result data. It does not know about AssemblyAI events, interactive-call
 tracking, supersession/cancellation, sessions, tool turns, or result queues.
 
-`browser-tool.js` owns browser-side HTTP execution for the four bounded
+`browser-tool.js` owns browser-side HTTP execution for the six bounded
 browser actions. It calls the local browser endpoint and returns normalized
 results; it does not know about MCP, AssemblyAI sessions, tool turns, or result
 queues.

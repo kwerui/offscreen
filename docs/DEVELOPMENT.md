@@ -129,9 +129,10 @@ matching implementation:
   Google Calendar with server-side OAuth.
 - `ask_codex` calls the local Codex route, which starts the local read-only
   Codex CLI.
-- `browser_navigate`, `browser_read_page`, `browser_find_on_page`, and
-  `browser_go_back` call the local browser route. Its backend adapter owns a
-  lazy, reused Playwright MCP connection and exposes only those four actions.
+- `browser_navigate`, `browser_read_page`, `browser_find_on_page`,
+  `browser_go_back`, `browser_click`, and `browser_type` call the local browser
+  route. Its backend adapter owns a lazy, reused Playwright MCP connection and
+  exposes only those six actions.
 
 The browser packages the outcome as a `tool.result` message for AssemblyAI.
 AssemblyAI then uses that result to speak its answer.
@@ -211,11 +212,14 @@ tool catalog to AssemblyAI.
 
 ### First browser MCP increment
 
-The initial Playwright MCP integration runs the locally installed
-`@playwright/mcp` server lazily in a headless, isolated context. It permits
-only explicit http/https navigation, page accessibility snapshots, literal
-text finding, and browser history back. It does not permit clicks, typing,
-forms, arbitrary evaluation, downloads, uploads, or arbitrary MCP forwarding.
+The Playwright MCP integration runs the locally installed `@playwright/mcp`
+server lazily in a headless, isolated context. It permits only explicit
+http/https navigation, page accessibility snapshots, literal text finding,
+browser history back, and click/type on refs observed in the latest snapshot or
+find output. Typing never submits; clicks whose observed descriptions indicate
+consequential actions are unavailable until confirmation support exists. It
+does not permit forms, arbitrary evaluation, downloads, uploads, or arbitrary
+MCP forwarding.
 
 Install Playwright's managed Chromium before a live browser run:
 

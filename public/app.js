@@ -851,6 +851,23 @@ async function handleToolCall(event, sessionId, toolTurnId) {
       input: {},
       activity: "Going back in the browser.",
     },
+    browser_click: {
+      action: "click",
+      input: {
+        target: event.arguments?.target,
+        element: event.arguments?.element_description,
+      },
+      activity: "Clicking a browser element.",
+    },
+    browser_type: {
+      action: "type",
+      input: {
+        target: event.arguments?.target,
+        text: event.arguments?.text,
+        element: event.arguments?.element_description,
+      },
+      activity: "Typing in the browser without submitting.",
+    },
   };
   const browserAction = browserActions[event.name];
 

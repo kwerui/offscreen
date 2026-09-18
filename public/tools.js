@@ -189,6 +189,67 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "browser_click",
+
+    description:
+      "Click one harmless page element using only a ref returned by browser_read_page or browser_find_on_page. " +
+      "If the page or ref changed, read or find it again before retrying; never repeat the same failed click without refreshed page state. " +
+      "Do not use for delete, purchase, send, submit, publish, account confirmation, or any consequential action: those are unavailable until confirmation is implemented.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description: "An exact ref from the latest browser page read or find result.",
+        },
+        element_description: {
+          type: "string",
+          description: "Optional human-readable description of the referenced element.",
+        },
+      },
+      required: ["target"],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
+    name: "browser_type",
+
+    description:
+      "Type text into an editable page element using only a ref returned by browser_read_page or browser_find_on_page. " +
+      "Typing never submits or presses Enter. If the ref changed or the target is not editable, read or find the page again instead of retrying the same type call.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description: "An exact ref from the latest browser page read or find result.",
+        },
+        text: {
+          type: "string",
+          description: "The text to enter without submitting the page.",
+        },
+        element_description: {
+          type: "string",
+          description: "Optional human-readable description of the referenced editable element.",
+        },
+      },
+      required: ["target", "text"],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
     name: "open_website",
 
     description:

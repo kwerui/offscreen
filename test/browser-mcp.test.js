@@ -26,7 +26,7 @@ function createFakeClient({ tools, callTool } = {}) {
       this.callToolCalls.push(request);
       return callTool
         ? callTool(request)
-        : { content: [{ type: "text", text: "Page content" }] };
+        : { content: [{ type: "text", text: '- link "Example" [ref=e5]' }] };
     },
   };
 }
@@ -52,6 +52,238 @@ test("maps only allowed Offscreen actions to Playwright MCP tools", async () => 
   }
 });
 
+test("accepts only refs observed in the latest snapshot or find output", async () => {
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_snapshot") {
+        return {
+          content: [{ type: "text", text: '- textbox "Search" [ref=e5]' }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("snapshot");
+  assert.equal((await browserMcp.run("click", { target: "e5" })).success, true);
+  assert.deepEqual(await browserMcp.run("type", { target: "e5", text: "test" }), {
+    success: false,
+    error: "Browser target must be a ref from the latest page read or find result",
+  });
+  assert.deepEqual(await browserMcp.run("click", { target: "button.search" }), {
+    success: false,
+    error: "Browser target must be a ref from the latest page read or find result",
+  });
+});
+
+test("updates observed refs from find output and always types without submitting", async () => {
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_find") {
+        return {
+          content: [{ type: "text", text: '- textbox "Search" [ref=e9]' }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("find", { text: "Search" });
+  const result = await browserMcp.run("type", {
+    target: "e9",
+    text: "AssemblyAI",
+    element: "Wikipedia search box",
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(client.callToolCalls.at(-1), {
+    name: "browser_type",
+    arguments: {
+      target: "e9",
+      text: "AssemblyAI",
+      element: "Wikipedia search box",
+      submit: false,
+      slowly: false,
+    },
+  });
+});
+
+test("accepts Playwright refs with a navigation prefix", async () => {
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_snapshot") {
+        return {
+          content: [{ type: "text", text: '- searchbox "Search" [ref=f1e23]' }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("snapshot");
+  assert.equal(
+    (await browserMcp.run("type", { target: "f1e23", text: "AssemblyAI" })).success,
+    true
+  );
+});
+
+test("rejects browser type for an observed non-editable target", async () => {
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_snapshot") {
+        return {
+          content: [{ type: "text", text: '- button "Search" [ref=e25]' }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("snapshot");
+  assert.deepEqual(await browserMcp.run("type", { target: "e25", text: "AssemblyAI" }), {
+    success: false,
+    error: "Browser type target is not editable. Read or find the page again to locate an editable field.",
+    errorCode: "browser_target_not_editable",
+  });
+  assert.equal(client.callToolCalls.length, 1);
+});
+
+test("invalidates refs and requests a refresh after a stale click failure", async () => {
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_snapshot") {
+        return {
+          content: [{ type: "text", text: '- link "English" [ref=e9]' }],
+        };
+      }
+
+      if (request.name === "browser_click") {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Error: Ref e9 not found in the current page snapshot. Try capturing new snapshot." }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("snapshot");
+  assert.deepEqual(await browserMcp.run("click", { target: "e9" }), {
+    success: false,
+    error: "Browser page changed. Read or find the page again before trying this interaction.",
+    errorCode: "browser_ref_stale",
+  });
+  assert.deepEqual(await browserMcp.run("click", { target: "e9" }), {
+    success: false,
+    error: "Browser target must be a ref from the latest page read or find result",
+  });
+});
+
+test("invalidates refs after a stale type failure and after successful typing", async () => {
+  let snapshotCount = 0;
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_snapshot") {
+        snapshotCount++;
+        return {
+          content: [{ type: "text", text: '- searchbox "Search" [ref=e53]' }],
+        };
+      }
+
+      if (request.name === "browser_type" && snapshotCount === 1) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Error: Ref e53 not found in the current page snapshot. Try capturing new snapshot." }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("snapshot");
+  assert.deepEqual(await browserMcp.run("type", { target: "e53", text: "AssemblyAI" }), {
+    success: false,
+    error: "Browser page changed. Read or find the page again before trying this interaction.",
+    errorCode: "browser_ref_stale",
+  });
+  assert.deepEqual(await browserMcp.run("type", { target: "e53", text: "AssemblyAI" }), {
+    success: false,
+    error: "Browser target must be a ref from the latest page read or find result",
+  });
+
+  await browserMcp.run("snapshot");
+  assert.equal((await browserMcp.run("type", { target: "e53", text: "AssemblyAI" })).success, true);
+  assert.deepEqual(await browserMcp.run("type", { target: "e53", text: "AssemblyAI" }), {
+    success: false,
+    error: "Browser target must be a ref from the latest page read or find result",
+  });
+});
+
+test("rejects type text that exceeds the safe limit", () => {
+  assert.deepEqual(validateBrowserRequest("type", {
+    target: "e5",
+    text: "x".repeat(2_001),
+  }), {
+    success: false,
+    error: "Browser type text is too long",
+  });
+});
+
+test("rejects consequential click targets before calling MCP", async () => {
+  const client = createFakeClient({
+    callTool: async (request) => {
+      if (request.name === "browser_snapshot") {
+        return {
+          content: [{ type: "text", text: '- button "Delete account" [ref=e12]' }],
+        };
+      }
+
+      return { content: [{ type: "text", text: "Done" }] };
+    },
+  });
+  const browserMcp = createBrowserMcp({
+    createClient: () => client,
+    createTransport: () => ({}),
+  });
+
+  await browserMcp.run("snapshot");
+  assert.deepEqual(await browserMcp.run("click", { target: "e12" }), {
+    success: false,
+    error: "This browser action requires confirmation support, which is not enabled yet.",
+  });
+  assert.equal(client.callToolCalls.length, 1);
+});
+
 test("rejects unsupported browser actions without contacting MCP", async () => {
   const client = createFakeClient();
   const browserMcp = createBrowserMcp({
@@ -59,7 +291,7 @@ test("rejects unsupported browser actions without contacting MCP", async () => {
     createTransport: () => ({}),
   });
 
-  assert.deepEqual(await browserMcp.run("click", { target: "e1" }), {
+  assert.deepEqual(await browserMcp.run("drag", { target: "e1" }), {
     success: false,
     error: "Unsupported browser action",
   });
