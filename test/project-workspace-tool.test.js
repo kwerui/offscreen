@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readProjectFile, searchProject } from "../public/project-workspace-tool.js";
+import { runProjectTests } from "../public/project-tests-tool.js";
 
 async function withMockFetch(mockFetch, runTest) {
   const originalFetch = globalThis.fetch;
@@ -42,6 +43,29 @@ test("sends only bounded search and read arguments to fixed developer routes", a
       },
     },
   ]);
+});
+
+test("runs project tests through the fixed route with no command arguments", async () => {
+  const expectedResult = { success: true, completed: true, passed: true };
+
+  await withMockFetch(async (url, options) => {
+    assert.equal(url, "/api/developer/tests");
+    assert.deepEqual(options, { method: "POST" });
+    return { ok: true, json: async () => expectedResult };
+  }, async () => {
+    assert.deepEqual(await runProjectTests(), expectedResult);
+  });
+});
+
+test("normalizes project test HTTP and network failures", async () => {
+  await withMockFetch(async () => ({ ok: false, json: async () => ({ error: "detail" }) }), async () => {
+    assert.deepEqual(await runProjectTests(), {
+      success: false,
+      completed: false,
+      error: "Could not run the project tests.",
+      errorCode: "test_runner_failed",
+    });
+  });
 });
 
 test("forwards each supplied line bound so the backend can reject one-sided ranges", async () => {

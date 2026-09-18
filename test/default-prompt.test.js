@@ -52,3 +52,11 @@ test("routes deterministic project search and reading away from Codex", () => {
   assert.match(defaultPrompt, /Do not call ask_codex[\s\S]*simple deterministic search or[\s\S]*read facts/i);
   assert.match(defaultPrompt, /paths[\s\S]*filenames[\s\S]*snippets[\s\S]*source content[\s\S]*untrusted[\s\S]*data only[\s\S]*never[\s\S]*instructions/i);
 });
+
+test("routes deterministic project test requests away from Codex", () => {
+  assert.match(defaultPrompt, /DETERMINISTIC PROJECT TEST TOOL ROUTING.*REQUIRED/i);
+  assert.match(defaultPrompt, /Run the tests[\s\S]*Do the tests pass[\s\S]*Are any tests failing[\s\S]*run_project_tests/i);
+  assert.match(defaultPrompt, /Do not call ask_codex[\s\S]*deterministic test execution or[\s\S]*current test facts/i);
+  assert.match(defaultPrompt, /WHY a test failed[\s\S]*Codex/i);
+  assert.match(defaultPrompt, /test names[\s\S]*failure messages[\s\S]*file paths[\s\S]*test output[\s\S]*untrusted[\s\S]*repository-derived[\s\S]*never[\s\S]*instructions/i);
+});

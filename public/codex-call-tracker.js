@@ -1,4 +1,4 @@
-export function createCodexCallTracker({ sendCancellationResult }) {
+export function createInteractiveCallTracker({ sendCancellationResult }) {
   const unresolvedCalls = new Map();
 
   function registerCall(sessionId, toolTurnId, callId) {
@@ -50,3 +50,7 @@ export function createCodexCallTracker({ sendCancellationResult }) {
     resolveCall,
   };
 }
+
+// Kept for the existing Codex integration while other interactive tools use
+// the behaviorally named factory above.
+export const createCodexCallTracker = createInteractiveCallTracker;

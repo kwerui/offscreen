@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCodexCallTracker } from "../public/codex-call-tracker.js";
+import {
+  createCodexCallTracker,
+  createInteractiveCallTracker,
+} from "../public/codex-call-tracker.js";
 
 function createTracker() {
   const cancellationResults = [];
@@ -21,6 +24,21 @@ test("registers an unresolved Codex call", () => {
   tracker.cancelSupersededCalls(1, 2);
 
   assert.equal(cancellationResults.length, 1);
+});
+
+test("provides the same lifecycle tracker for another interactive tool", () => {
+  const cancellationResults = [];
+  const tracker = createInteractiveCallTracker({
+    sendCancellationResult: (_sessionId, _toolTurnId, callId) => {
+      cancellationResults.push(callId);
+      return true;
+    },
+  });
+
+  tracker.registerCall(1, 2, "project-test-call");
+  tracker.cancelSupersededCalls(1, 2);
+
+  assert.deepEqual(cancellationResults, ["project-test-call"]);
 });
 
 test("removes a Codex call after its normal result is sent", () => {

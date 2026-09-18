@@ -36,6 +36,7 @@ import {
   readProjectFile,
   searchProject,
 } from "./project-workspace.js";
+import { runProjectTests } from "./project-tests.js";
 
 const PORT = process.env.PORT || 3000;
 const HOST = "127.0.0.1";
@@ -55,6 +56,8 @@ export function createApp({
   projectSearchImpl = searchProject,
   projectReadFileImpl = readProjectFile,
   projectWorkspaceRoot = __dirname,
+  projectTestImpl = runProjectTests,
+  projectTestRoot = __dirname,
 } = {}) {
   if (!apiKey) {
     throw new Error(
@@ -434,6 +437,14 @@ app.post("/api/developer/read-file", async (req, res) => {
   });
 
   res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/tests", async (_req, res) => {
+  const result = await projectTestImpl({ projectRoot: projectTestRoot });
+
+  // A failed suite is a completed tool result, not an HTTP failure. The
+  // browser needs the normalized result to report the real test state.
+  res.status(200).json(result);
 });
 }
 

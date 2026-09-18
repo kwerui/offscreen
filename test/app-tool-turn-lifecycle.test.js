@@ -151,6 +151,7 @@ test("cancels current Codex work, ignores its late completion, and preserves tra
   const originalAudioWorkletNode = globalThis.AudioWorkletNode;
   const firstCodexResponse = createDeferred();
   const secondCodexResponse = createDeferred();
+  const projectTestResponse = createDeferred();
   let codexRequestCount = 0;
 
   try {
@@ -158,6 +159,10 @@ test("cancels current Codex work, ignores its late completion, and preserves tra
     globalThis.fetch = async (url) => {
       if (url === "/api/voice-token") {
         return { ok: true, json: async () => ({ token: "test-token" }) };
+      }
+
+      if (url === "/api/developer/tests") {
+        return projectTestResponse.promise;
       }
 
       codexRequestCount++;
@@ -171,6 +176,7 @@ test("cancels current Codex work, ignores its late completion, and preserves tra
 
     const socket = FakeWebSocket.instances.at(-1);
     socket.open();
+    socket.receive({ type: "session.ready", session_id: "tool-turn-session" });
 
     socket.receive({
       type: "tool.call",
@@ -279,6 +285,42 @@ test("cancels current Codex work, ignores its late completion, and preserves tra
       [{
         type: "tool.result",
         call_id: "normal-order-codex-call",
+        result: JSON.stringify({
+          success: false,
+          cancelled: true,
+          error: "Superseded by a newer user request.",
+        }),
+      }]
+    );
+
+    socket.receive({
+      type: "tool.call",
+      name: "run_project_tests",
+      call_id: "project-test-call",
+      arguments: { command: "npm run dangerous" },
+    });
+    await flushPromises();
+    const activityUpdate = socket.sentMessages
+      .filter((message) => message.type === "session.update")
+      .at(-1);
+
+    assert.deepEqual(Object.keys(activityUpdate.session), ["system_prompt"]);
+    assert.match(activityUpdate.session.system_prompt, /Running the project tests/);
+
+    socket.receive({ type: "input.speech.started" });
+    socket.receive({ type: "transcript.user.delta", text: "What's the Git" });
+    socket.receive({ type: "transcript.user", text: "A newer request." });
+    projectTestResponse.resolve({
+      ok: true,
+      json: async () => ({ success: true, completed: true, passed: true }),
+    });
+    await flushPromises();
+
+    assert.deepEqual(
+      socket.sentMessages.filter((message) => message.call_id === "project-test-call"),
+      [{
+        type: "tool.result",
+        call_id: "project-test-call",
         result: JSON.stringify({
           success: false,
           cancelled: true,

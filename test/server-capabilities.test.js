@@ -36,6 +36,7 @@ test("LOCAL registers every current backend capability route", () => {
     { path: "/api/developer/git-status", methods: ["post"] },
     { path: "/api/developer/read-file", methods: ["post"] },
     { path: "/api/developer/search", methods: ["post"] },
+    { path: "/api/developer/tests", methods: ["post"] },
     { path: "/api/voice-token", methods: ["get"] },
   ]);
 });
@@ -148,4 +149,29 @@ test("project workspace routes use only the configured project root and bounded 
     { name: "search", options: { projectRoot: "/configured/project", query: "needle" } },
     { name: "read", options: { projectRoot: "/configured/project", path: "file.js", startLine: 2, endLine: 4 } },
   ]);
+});
+
+test("project test route ignores request command, cwd, root, and environment input", async () => {
+  const calls = [];
+  const app = createApp({
+    apiKey: "test-key",
+    mode: "LOCAL",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ token: "test-token" }) }),
+    projectTestRoot: "/configured/project",
+    projectTestImpl: async (options) => {
+      calls.push(options);
+      return { success: true, completed: true, passed: true, failures: [] };
+    },
+  });
+  const route = app._router.stack.find(
+    (layer) => layer.route?.path === "/api/developer/tests"
+  );
+  const response = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+
+  await route.route.stack[0].handle({
+    body: { command: "npm run dangerous", args: ["--flag"], projectRoot: "/outside", cwd: "/outside", env: { SECRET: "leak" } },
+  }, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(calls, [{ projectRoot: "/configured/project" }]);
 });

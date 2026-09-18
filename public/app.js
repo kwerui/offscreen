@@ -33,9 +33,13 @@ import {
   readProjectFile,
   searchProject,
 } from "./project-workspace-tool.js";
+import { runProjectTests } from "./project-tests-tool.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
-import { createCodexCallTracker } from "./codex-call-tracker.js";
+import {
+  createCodexCallTracker,
+  createInteractiveCallTracker,
+} from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
 import { createWakeListener } from "./wake-listener.js";
@@ -277,13 +281,18 @@ function getSystemPrompt() {
   return `${normalSystemPrompt}${activityContext}${browserConfirmationContext}${standbyInstructions}`;
 }
 
-function updateSystemPrompt() {
+function updateSystemPrompt({ includeTools = true } = {}) {
+  const session = {
+    system_prompt: getSystemPrompt(),
+  };
+
+  if (includeTools) {
+    session.tools = standbyMode ? [] : voiceTools;
+  }
+
   return voiceSession.send({
     type: "session.update",
-    session: {
-      system_prompt: getSystemPrompt(),
-      tools: standbyMode ? [] : voiceTools,
-    },
+    session,
   });
 }
 
@@ -292,7 +301,9 @@ function syncCurrentActivityPrompt() {
     return;
   }
 
-  updateSystemPrompt();
+  // Activity text changes the prompt only. Re-sending tools while one of them
+  // is held can reconfigure the agent's active tool state mid-execution.
+  updateSystemPrompt({ includeTools: false });
 }
 
 function startActivity(sessionId, toolTurnId, callId, description) {
@@ -469,6 +480,12 @@ const codexCallTracker = createCodexCallTracker({
   },
 });
 
+const projectTestCallTracker = createInteractiveCallTracker({
+  sendCancellationResult: (sessionId, toolTurnId, callId, result) => (
+    sendToolResult(sessionId, toolTurnId, callId, result, true)
+  ),
+});
+
 const toolResultCoordinator = createToolResultCoordinator({
   isCurrent: isActiveToolTurn,
   canSendResults: (sessionId, toolTurnId) => (
@@ -484,6 +501,7 @@ const toolResultCoordinator = createToolResultCoordinator({
 
     if (wasSent) {
       codexCallTracker.resolveCall(callId);
+      projectTestCallTracker.resolveCall(callId);
     }
 
     return wasSent;
@@ -515,6 +533,7 @@ function cancelCurrentToolWork(sessionId, toolTurnId, callId) {
 
   // Send tracked Codex cancellations while their original turn is still valid.
   codexCallTracker.cancelSupersededCalls(sessionId, toolTurnId);
+  projectTestCallTracker.cancelSupersededCalls(sessionId, toolTurnId);
   clearPendingBrowserConfirmation(true);
 
   // Advancing the turn drops queued and future results from all old tool work.
@@ -769,11 +788,19 @@ function handleEvent(event, sessionId) {
             sessionId,
             interruptedToolTurnId
           );
+          projectTestCallTracker.cancelSupersededCalls(
+            sessionId,
+            interruptedToolTurnId
+          );
         }
 
         interruptedToolTurnIds.clear();
 
         codexCallTracker.cancelSupersededCalls(sessionId, activeToolTurnId);
+        projectTestCallTracker.cancelSupersededCalls(
+          sessionId,
+          activeToolTurnId
+        );
         invalidateToolTurn();
       }
 
@@ -1256,6 +1283,32 @@ async function handleToolCall(event, sessionId, toolTurnId) {
     return;
   }
 
+  if (event.name === "run_project_tests") {
+    projectTestCallTracker.registerCall(sessionId, toolTurnId, event.call_id);
+
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Running the project tests."
+    );
+
+    try {
+      const result = await runProjectTests();
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
+
   // ---------------------------------
   // CODEX
   // ---------------------------------
@@ -1364,6 +1417,7 @@ function teardown(
   invalidateToolTurn(false);
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
+  projectTestCallTracker.clear();
   resetStoredAgentResponses();
   standbyMode = false;
   normalSystemPrompt = "";

@@ -142,6 +142,23 @@ test("defines the bounded no-argument Git status voice tool", () => {
   );
 });
 
+test("defines an interactive bounded no-argument project test voice tool", () => {
+  const testTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "run_project_tests"
+  );
+
+  assert.ok(testTool);
+  assert.deepEqual(testTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.equal(testTool.execution_mode, "interactive");
+  assert.match(testTool.description, /run tests.*pass.*failing/i);
+  assert.match(testTool.description, /cannot.*command.*script.*flags.*project.*environment/i);
+  assert.match(testTool.description, /test names.*failure messages.*file paths.*test output.*untrusted.*repository-derived.*never.*instructions/i);
+});
+
 test("defines bounded local project search and read voice tools", () => {
   const searchTool = VOICE_TOOLS.find((tool) => tool.name === "search_project");
   const readTool = VOICE_TOOLS.find((tool) => tool.name === "read_project_file");
