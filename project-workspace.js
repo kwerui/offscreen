@@ -4,6 +4,8 @@ import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
 const MAX_QUERY_CHARACTERS = 200;
 export const MAX_PROJECT_PATH_CHARACTERS = 512;
 const MAX_MATCHES = 50;
+const MAX_PRESENTED_SEARCH_FILES = 8;
+const MAX_VOICE_SEARCH_TOKENS = 6;
 const MAX_SNIPPET_CHARACTERS = 240;
 const MAX_SEARCH_FILE_BYTES = 512 * 1024;
 const MAX_READ_FILE_BYTES = 128 * 1024;
@@ -160,6 +162,8 @@ async function walkProjectFiles(projectRoot, directoryPath = "") {
     return [];
   }
 
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+
   const files = [];
 
   for (const entry of entries) {
@@ -177,6 +181,121 @@ async function walkProjectFiles(projectRoot, directoryPath = "") {
   }
 
   return files;
+}
+
+function createSearchFiles(matches) {
+  const files = [];
+  const seenPaths = new Set();
+
+  for (const match of matches) {
+    if (seenPaths.has(match.path)) {
+      continue;
+    }
+
+    seenPaths.add(match.path);
+    const file = { path: match.path };
+
+    if (Number.isInteger(match.line)) {
+      file.firstLine = match.line;
+    }
+
+    files.push(file);
+  }
+
+  return files;
+}
+
+function createSearchPresentation(files) {
+  const presentedFiles = files.slice(0, MAX_PRESENTED_SEARCH_FILES);
+
+  return {
+    files: presentedFiles.map((file, index) => ({
+      position: index + 1,
+      path: file.path,
+    })),
+    truncated: files.length > presentedFiles.length,
+  };
+}
+
+export function createVoiceSearchVariants(query) {
+  const tokens = query.trim().split(/\s+/);
+
+  if (
+    tokens.length < 2 ||
+    tokens.length > MAX_VOICE_SEARCH_TOKENS ||
+    !tokens.every((token) => /^[a-zA-Z0-9]+$/.test(token))
+  ) {
+    return [query];
+  }
+
+  const lowerCaseTokens = tokens.map((token) => token.toLowerCase());
+  const camelCase = lowerCaseTokens[0] + lowerCaseTokens
+    .slice(1)
+    .map((token) => `${token[0].toUpperCase()}${token.slice(1)}`)
+    .join("");
+  const variants = [
+    camelCase,
+    lowerCaseTokens.join("-"),
+    lowerCaseTokens.join("_"),
+    lowerCaseTokens.join("."),
+    query,
+  ];
+
+  return [...new Set(variants)];
+}
+
+async function findLiteralProjectMatches({
+  projectRoot,
+  paths,
+  query,
+  addMatch,
+  seenMatchKeys,
+}) {
+  for (const path of paths) {
+    const addUniqueMatch = (match) => {
+      const key = `${match.path}\0${match.line ?? ""}`;
+
+      if (seenMatchKeys.has(key)) {
+        return true;
+      }
+
+      seenMatchKeys.add(key);
+      return addMatch(match);
+    };
+
+    if (path.includes(query) && !addUniqueMatch({ path })) {
+      return false;
+    }
+
+    const projectFile = await getProjectFile(projectRoot, path);
+
+    if (!projectFile || projectFile.size > MAX_SEARCH_FILE_BYTES) {
+      continue;
+    }
+
+    let content;
+    try {
+      content = decodeProjectText(await readFile(projectFile.absolutePath));
+    } catch {
+      continue;
+    }
+
+    if (content === null) {
+      continue;
+    }
+
+    for (const [index, line] of content.split(/\r?\n/).entries()) {
+      if (line.includes(query) && !addUniqueMatch({
+        path,
+        line: index + 1,
+        snippet: createSnippet(line, query),
+      })) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 export async function searchProject({ projectRoot, query }) {
@@ -206,44 +325,35 @@ export async function searchProject({ projectRoot, query }) {
     return true;
   };
 
-  for (const path of await walkProjectFiles(resolvedRoot)) {
-    if (path.includes(query) && !addMatch({ path })) {
-      break;
-    }
+  const paths = await walkProjectFiles(resolvedRoot);
+  const seenMatchKeys = new Set();
 
-    const projectFile = await getProjectFile(resolvedRoot, path);
+  for (const variant of createVoiceSearchVariants(query)) {
+    const completed = await findLiteralProjectMatches({
+      projectRoot: resolvedRoot,
+      paths,
+      query: variant,
+      addMatch,
+      seenMatchKeys,
+    });
 
-    if (!projectFile || projectFile.size > MAX_SEARCH_FILE_BYTES) {
-      continue;
-    }
-
-    let content;
-    try {
-      content = decodeProjectText(await readFile(projectFile.absolutePath));
-    } catch {
-      continue;
-    }
-
-    if (content === null) {
-      continue;
-    }
-
-    for (const [index, line] of content.split(/\r?\n/).entries()) {
-      if (line.includes(query) && !addMatch({
-        path,
-        line: index + 1,
-        snippet: createSnippet(line, query),
-      })) {
-        break;
-      }
-    }
-
-    if (truncated) {
+    if (!completed) {
       break;
     }
   }
 
-  return { success: true, query, matches, truncated };
+  const files = createSearchFiles(matches);
+
+  return {
+    success: true,
+    query,
+    matches,
+    files,
+    // This bounds the safe files eligible for spoken search context. The client
+    // later aligns follow-up ordinals to the exact subset/order actually spoken.
+    presentation: createSearchPresentation(files),
+    truncated,
+  };
 }
 
 export async function readProjectFile({ projectRoot, path, startLine, endLine }) {

@@ -168,6 +168,7 @@ test("defines bounded local project search and read voice tools", () => {
   assert.equal(searchTool.execution_mode, "hold");
   assert.equal(readTool.execution_mode, "hold");
   assert.match(searchTool.description, /literal/i);
+  assert.match(searchTool.description, /small bounded set.*safe text variants/i);
   assert.match(searchTool.description, /paths.*filenames.*snippets.*untrusted.*data.*never.*instructions/i);
   assert.match(readTool.description, /source content.*untrusted.*data.*never.*instructions/i);
 });

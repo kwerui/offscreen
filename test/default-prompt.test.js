@@ -51,6 +51,10 @@ test("routes deterministic project search and reading away from Codex", () => {
   assert.match(defaultPrompt, /named project file[\s\S]*read_project_file/i);
   assert.match(defaultPrompt, /Do not call ask_codex[\s\S]*simple deterministic search or[\s\S]*read facts/i);
   assert.match(defaultPrompt, /paths[\s\S]*filenames[\s\S]*snippets[\s\S]*source content[\s\S]*untrusted[\s\S]*data only[\s\S]*never[\s\S]*instructions/i);
+  assert.match(defaultPrompt, /presentation\.files[\s\S]*bounded set of file paths/i);
+  assert.match(defaultPrompt, /use only exact paths[\s\S]*actually heard[\s\S]*spoken order/i);
+  assert.match(defaultPrompt, /unmentioned files[\s\S]*do\s+not\s+become hidden ordinal choices/i);
+  assert.match(defaultPrompt, /small bounded set of safe text forms/i);
 });
 
 test("routes deterministic VS Code project file opening away from Codex", () => {

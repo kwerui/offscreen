@@ -13,6 +13,7 @@ async function createProjectFixture() {
   await mkdir(join(projectRoot, "public"));
   await writeFile(join(projectRoot, "server.js"), "export const server = true;\n");
   await writeFile(join(projectRoot, "public", "app.js"), "export const app = true;\n");
+  await writeFile(join(projectRoot, "public", "project-tests-tool.js"), "export const projectTestsTool = true;\n");
   await writeFile(join(projectRoot, ".env"), "SECRET=value");
   await writeFile(join(projectRoot, "binary.dat"), Buffer.from([0, 1, 2, 3]));
   await writeFile(join(outsideRoot, "outside.js"), "export const outside = true;");
@@ -58,6 +59,30 @@ test("opens allowed project files with the fixed VS Code CLI without a shell", a
     assert.equal(calls[0].options.shell, false);
     assert.equal(calls[0].options.stdio, "ignore");
     assert.deepEqual(Object.keys(calls[0].options.env), ["PATH"]);
+  });
+});
+
+test("validates and launches nested searched files exactly like public/app.js", async () => {
+  await withProjectFixture(async ({ projectRoot }) => {
+    const calls = [];
+    const launcher = createSuccessfulLauncher(calls);
+    const appResult = await openProjectFile({
+      projectRoot,
+      path: "public/app.js",
+      launcher,
+    });
+    const nestedResult = await openProjectFile({
+      projectRoot,
+      path: "public/project-tests-tool.js",
+      launcher,
+    });
+
+    assert.deepEqual(appResult, { success: true, path: "public/app.js" });
+    assert.deepEqual(nestedResult, { success: true, path: "public/project-tests-tool.js" });
+    assert.deepEqual(calls.map((call) => call.argumentsList), [
+      [join(await realpath(projectRoot), "public", "app.js")],
+      [join(await realpath(projectRoot), "public", "project-tests-tool.js")],
+    ]);
   });
 });
 

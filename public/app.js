@@ -35,6 +35,7 @@ import {
   searchProject,
 } from "./project-workspace-tool.js";
 import { runProjectTests } from "./project-tests-tool.js";
+import { createProjectReferenceContext } from "./project-reference-context.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import {
@@ -80,6 +81,11 @@ let latestCompletedUserTurn = null;
 
 const projectFileOpenAttempts = new Set();
 
+const projectReferenceContext = capabilities.developerWorkspace
+  ? createProjectReferenceContext()
+  : null;
+
+let pendingSearchResultCallId = null;
 let pendingBrowserConfirmation = null;
 
 const EXPLICIT_CONFIRMATION_RESPONSES = new Set([
@@ -263,6 +269,42 @@ function getProjectFileOpenAttemptKey(path, line) {
     path: path ?? null,
     line: line ?? null,
   });
+}
+
+function registerProjectReferenceResult(toolName, result, sessionId, toolTurnId) {
+  if (isActiveToolTurn(sessionId, toolTurnId)) {
+    projectReferenceContext?.registerResult(toolName, result);
+  }
+}
+
+function createSearchProjectResultForAgent(result) {
+  if (!result?.success || !Array.isArray(result.presentation?.files)) {
+    return result;
+  }
+
+  const presentedPaths = result.presentation.files
+    .map((file) => file?.path)
+    .filter((path) => typeof path === "string");
+  const matches = presentedPaths.flatMap((path) =>
+    (result.matches ?? []).filter((match) => match?.path === path)
+  );
+
+  return {
+    success: true,
+    query: result.query,
+    matches,
+    files: presentedPaths.map((path) => ({ path })),
+    presentation: result.presentation,
+    truncated: Boolean(result.truncated || result.presentation.truncated),
+  };
+}
+
+function resolveProjectToolArguments(event) {
+  return projectReferenceContext?.resolve({
+    toolName: event.name,
+    arguments: event.arguments,
+    userText: latestCompletedUserTurn?.text,
+  }) ?? { success: true, arguments: event.arguments ?? {} };
 }
 
 function getCurrentActivityText() {
@@ -512,6 +554,11 @@ const toolResultCoordinator = createToolResultCoordinator({
     );
 
     if (wasSent) {
+      if (callId === pendingSearchResultCallId) {
+        projectReferenceContext?.markPendingSearchResultReady();
+        pendingSearchResultCallId = null;
+      }
+
       codexCallTracker.resolveCall(callId);
       projectTestCallTracker.resolveCall(callId);
     }
@@ -526,6 +573,8 @@ const toolResultCoordinator = createToolResultCoordinator({
 function invalidateToolTurn(updateActivityPrompt = true) {
   activeToolTurnId++;
   pendingDisconnect = null;
+  pendingSearchResultCallId = null;
+  projectReferenceContext?.discardPendingSearchResult();
   toolResultCoordinator.reset();
   clearToolStatus();
   clearActivities(updateActivityPrompt);
@@ -911,6 +960,7 @@ function handleEvent(event, sessionId) {
         invalidateToolTurn();
       } else {
         if (pendingAgentResponse?.trim()) {
+          projectReferenceContext?.alignPendingSearchResult(pendingAgentResponse);
           lastCompletedAgentResponse = pendingAgentResponse;
         }
 
@@ -1219,6 +1269,25 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // DEVELOPER WORKSPACE
   // ---------------------------------
 
+  const projectToolNames = new Set([
+    "search_project",
+    "read_project_file",
+    "open_project_file",
+  ]);
+  const resolvedProjectCall = projectToolNames.has(event.name)
+    ? resolveProjectToolArguments(event)
+    : null;
+
+  if (resolvedProjectCall && !resolvedProjectCall.success) {
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      { success: false, error: resolvedProjectCall.error, terminal: true }
+    );
+    return;
+  }
+
   if (event.name === "search_project") {
     startActivity(
       sessionId,
@@ -1228,13 +1297,18 @@ async function handleToolCall(event, sessionId, toolTurnId) {
     );
 
     try {
-      const result = await searchProject(event.arguments?.query);
+      const result = await searchProject(resolvedProjectCall.arguments.query);
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
+
+      if (result?.success && isActiveToolTurn(sessionId, toolTurnId)) {
+        pendingSearchResultCallId = event.call_id;
+      }
 
       toolResultCoordinator.queueResult(
         sessionId,
         toolTurnId,
         event.call_id,
-        result
+        createSearchProjectResultForAgent(result)
       );
     } finally {
       finishActivity(sessionId, toolTurnId, event.call_id);
@@ -1253,10 +1327,11 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
     try {
       const result = await readProjectFile(
-        event.arguments?.path,
-        event.arguments?.start_line,
-        event.arguments?.end_line
+        resolvedProjectCall.arguments.path,
+        resolvedProjectCall.arguments.start_line,
+        resolvedProjectCall.arguments.end_line
       );
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
 
       toolResultCoordinator.queueResult(
         sessionId,
@@ -1273,8 +1348,8 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
   if (event.name === "open_project_file") {
     const attemptKey = getProjectFileOpenAttemptKey(
-      event.arguments?.path,
-      event.arguments?.line
+      resolvedProjectCall.arguments.path,
+      resolvedProjectCall.arguments.line
     );
 
     if (projectFileOpenAttempts.has(attemptKey)) {
@@ -1302,9 +1377,10 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
     try {
       const result = await openProjectFile(
-        event.arguments?.path,
-        event.arguments?.line
+        resolvedProjectCall.arguments.path,
+        resolvedProjectCall.arguments.line
       );
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
 
       toolResultCoordinator.queueResult(
         sessionId,
@@ -1329,6 +1405,7 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
     try {
       const result = await getGitStatus();
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
 
       toolResultCoordinator.queueResult(
         sessionId,
@@ -1355,6 +1432,7 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
     try {
       const result = await runProjectTests();
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
 
       toolResultCoordinator.queueResult(
         sessionId,
@@ -1478,6 +1556,8 @@ function teardown(
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
   projectTestCallTracker.clear();
+  projectReferenceContext?.clear();
+  pendingSearchResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
   normalSystemPrompt = "";
