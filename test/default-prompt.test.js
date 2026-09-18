@@ -17,7 +17,12 @@ test("routes general browser requests through the bounded browser tools", () => 
   assert.match(defaultPrompt, /browser_click.*observed refs|observed refs.*browser_click/i);
   assert.match(defaultPrompt, /browser_type.*observed refs|observed refs.*browser_type/i);
   assert.match(defaultPrompt, /Typing must not submit/i);
-  assert.match(defaultPrompt, /Consequential actions remain unavailable.*confirmation/i);
+  assert.match(defaultPrompt, /consequential click.*browser_click.*confirmation_required/i);
+  assert.match(defaultPrompt, /separate user turn.*browser_confirm_action/i);
+  assert.match(defaultPrompt, /negative.*cancels/i);
+  assert.match(defaultPrompt, /ambiguous.*leave.*pending/i);
+  assert.match(defaultPrompt, /button-like.*consequential.*default/i);
+  assert.match(defaultPrompt, /other user request.*cancel.*pending action/i);
   assert.match(defaultPrompt, /Before click or type, use current observed page refs/i);
   assert.match(defaultPrompt, /click or type fails because the page or ref changed.*browser_read_page.*browser_find_on_page/i);
   assert.match(defaultPrompt, /Never repeat the exact same failed browser click or type call more than once without refreshing page state/i);

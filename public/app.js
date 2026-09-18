@@ -56,6 +56,41 @@ let isAgentReplyOpen = false;
 
 const activeActivities = new Map();
 
+let completedUserTurnId = 0;
+
+let latestCompletedUserTurn = null;
+
+let pendingBrowserConfirmation = null;
+
+const EXPLICIT_CONFIRMATION_RESPONSES = new Set([
+  "yes",
+  "yes do it",
+  "confirm",
+  "confirm it",
+  "go ahead",
+  "proceed",
+  "do it",
+]);
+
+const EXPLICIT_REJECTION_RESPONSES = new Set([
+  "no",
+  "dont",
+  "do not",
+  "cancel",
+  "never mind",
+  "dont do it",
+  "no cancel",
+]);
+
+const EXPLICIT_AMBIGUOUS_CONFIRMATION_RESPONSES = new Set([
+  "maybe",
+  "perhaps",
+  "not sure",
+  "im not sure",
+  "hmm",
+  "i dont know",
+]);
+
 const FIXED_OFFSCREEN_INSTRUCTIONS =
   "When the user explicitly asks Offscreen to repeat its most recent response, " +
   "ALWAYS call repeat_last_response rather than repeating from conversation " +
@@ -126,6 +161,76 @@ function isActiveToolTurn(sessionId, toolTurnId) {
   );
 }
 
+function normalizeConfirmationResponse(text) {
+  return text
+    ?.trim()
+    .toLowerCase()
+    .replace(/’/g, "'")
+    .replace(/[^a-z0-9'\s]/g, " ")
+    .replace(/'/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isExplicitConfirmation(text) {
+  const normalizedText = normalizeConfirmationResponse(text);
+
+  return (
+    EXPLICIT_CONFIRMATION_RESPONSES.has(normalizedText) ||
+    /^yes (?:submit|send|delete|remove|buy|purchase|checkout|pay|donate|publish|authorize|confirm)(?: it)?$/.test(normalizedText)
+  );
+}
+
+function isExplicitRejection(text) {
+  return EXPLICIT_REJECTION_RESPONSES.has(normalizeConfirmationResponse(text));
+}
+
+function isExplicitAmbiguousConfirmation(text) {
+  return EXPLICIT_AMBIGUOUS_CONFIRMATION_RESPONSES.has(
+    normalizeConfirmationResponse(text)
+  );
+}
+
+function clearPendingBrowserConfirmation(cancelOnServer = false) {
+  const hadPendingConfirmation = Boolean(pendingBrowserConfirmation);
+  pendingBrowserConfirmation = null;
+
+  if (hadPendingConfirmation) {
+    syncCurrentActivityPrompt();
+  }
+
+  if (cancelOnServer && hadPendingConfirmation) {
+    void runBrowserTool("cancel_confirmation");
+  }
+}
+
+function getBrowserConfirmationContext() {
+  if (!pendingBrowserConfirmation) {
+    return "";
+  }
+
+  if (pendingBrowserConfirmation.latestResponseWasAmbiguous) {
+    return (
+      "\n\nA consequential browser action is still pending. The latest user response was ambiguous. " +
+      "Ask for a clear yes or no. Do not execute or claim it was cancelled."
+    );
+  }
+
+  return (
+    "\n\nA consequential browser action is pending. It has not executed. " +
+    "Only a separate explicit affirmative user turn may authorize the stored action."
+  );
+}
+
+function recordCompletedUserTurn(text) {
+  if (!text?.trim()) {
+    return;
+  }
+
+  completedUserTurnId++;
+  latestCompletedUserTurn = { id: completedUserTurnId, text };
+}
+
 function getCurrentActivityText() {
   const descriptions = [
     ...new Set(
@@ -147,8 +252,11 @@ function getSystemPrompt() {
   const standbyInstructions = standbyMode
     ? `\n\n${STANDBY_INSTRUCTIONS}`
     : "";
+  const browserConfirmationContext = normalSystemPrompt
+    ? getBrowserConfirmationContext()
+    : "";
 
-  return `${normalSystemPrompt}${activityContext}${standbyInstructions}`;
+  return `${normalSystemPrompt}${activityContext}${browserConfirmationContext}${standbyInstructions}`;
 }
 
 function updateSystemPrompt() {
@@ -244,6 +352,7 @@ function enterStandby(sessionId) {
   }
 
   if (!standbyMode) {
+    clearPendingBrowserConfirmation(true);
     standbyMode = true;
     suppressStandbyReply = false;
     updateSystemPrompt();
@@ -386,6 +495,7 @@ function cancelCurrentToolWork(sessionId, toolTurnId, callId) {
 
   // Send tracked Codex cancellations while their original turn is still valid.
   codexCallTracker.cancelSupersededCalls(sessionId, toolTurnId);
+  clearPendingBrowserConfirmation(true);
 
   // Advancing the turn drops queued and future results from all old tool work.
   invalidateToolTurn();
@@ -580,6 +690,30 @@ function handleEvent(event, sessionId) {
       break;
 
     case "transcript.user":
+      recordCompletedUserTurn(event.text);
+
+      if (
+        pendingBrowserConfirmation?.sessionId === sessionId &&
+        isExplicitRejection(event.text)
+      ) {
+        clearPendingBrowserConfirmation(true);
+      } else if (
+        pendingBrowserConfirmation?.sessionId === sessionId &&
+        isExplicitAmbiguousConfirmation(event.text)
+      ) {
+        pendingBrowserConfirmation.latestResponseWasAmbiguous = true;
+        syncCurrentActivityPrompt();
+      } else if (pendingBrowserConfirmation?.sessionId === sessionId) {
+        if (isExplicitConfirmation(event.text)) {
+          pendingBrowserConfirmation.latestResponseWasAmbiguous = false;
+          syncCurrentActivityPrompt();
+        } else {
+          // A different request supersedes the pending action. Clearing both
+          // client and backend state prevents a later yes from confirming it.
+          clearPendingBrowserConfirmation(true);
+        }
+      }
+
       if (standbyMode) {
         const standbyCommand = getStandbyCommand(event.text);
         const transcriptMeta = standbyCommand ? null : "ignored in standby";
@@ -783,6 +917,50 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   }
 
   // ---------------------------------
+  // BROWSER CONFIRMATION
+  // ---------------------------------
+
+  if (event.name === "browser_confirm_action") {
+    const userTurn = latestCompletedUserTurn;
+    let result;
+
+    if (
+      !pendingBrowserConfirmation ||
+      pendingBrowserConfirmation.sessionId !== sessionId
+    ) {
+      result = {
+        success: false,
+        error: "There is no pending browser action to confirm.",
+        errorCode: "browser_confirmation_missing",
+      };
+    } else if (
+      !userTurn ||
+      userTurn.id <= pendingBrowserConfirmation.requestUserTurnId ||
+      !isExplicitConfirmation(userTurn.text)
+    ) {
+      result = {
+        success: false,
+        error: "A new explicit confirmation is required before this browser action.",
+        errorCode: "browser_confirmation_rejected",
+      };
+    } else {
+      // Consume the client-side authorization before the request. The backend
+      // separately consumes its stored action before it calls Playwright.
+      clearPendingBrowserConfirmation();
+      result = await runBrowserTool("confirm");
+    }
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      result
+    );
+
+    return;
+  }
+
+  // ---------------------------------
   // REPEAT LAST RESPONSE
   // ---------------------------------
 
@@ -872,6 +1050,12 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   const browserAction = browserActions[event.name];
 
   if (browserAction) {
+    if (["navigate", "back", "click", "type"].includes(browserAction.action)) {
+      // The backend invalidates its exact stored action synchronously as part
+      // of these page-changing operations. Mirror that lifecycle locally.
+      clearPendingBrowserConfirmation();
+    }
+
     startActivity(
       sessionId,
       toolTurnId,
@@ -884,6 +1068,29 @@ async function handleToolCall(event, sessionId, toolTurnId) {
         browserAction.action,
         browserAction.input
       );
+
+      if (
+        result.success &&
+        ["snapshot", "find"].includes(browserAction.action)
+      ) {
+        // The backend refresh replaces its observed refs and invalidates the
+        // stored confirmation. Keep the model-facing state in lockstep.
+        clearPendingBrowserConfirmation();
+      }
+
+      if (result.confirmation_required) {
+        if (isActiveToolTurn(sessionId, toolTurnId)) {
+          pendingBrowserConfirmation = {
+            sessionId,
+            requestUserTurnId: latestCompletedUserTurn?.id ?? 0,
+            latestResponseWasAmbiguous: false,
+          };
+          syncCurrentActivityPrompt();
+        } else {
+          // A stale turn must not leave a server-held action waiting.
+          void runBrowserTool("cancel_confirmation");
+        }
+      }
 
       toolResultCoordinator.queueResult(
         sessionId,
@@ -1047,6 +1254,7 @@ function teardown(
   statusText = "Disconnected",
   restartVoiceWake = true
 ) {
+  clearPendingBrowserConfirmation(true);
   invalidateToolTurn(false);
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();

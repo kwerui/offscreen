@@ -120,19 +120,25 @@ calls the local Codex endpoint, and returns its existing success or failure
 tool-result data. It does not know about AssemblyAI events, interactive-call
 tracking, supersession/cancellation, sessions, tool turns, or result queues.
 
-`browser-tool.js` owns browser-side HTTP execution for the six bounded
-browser actions. It calls the local browser endpoint and returns normalized
-results; it does not know about MCP, AssemblyAI sessions, tool turns, or result
-queues.
+`browser-tool.js` owns browser-side HTTP execution for the bounded browser
+actions and confirmation control requests. It calls the local browser endpoint
+and returns normalized results; it does not know about MCP, AssemblyAI sessions,
+tool turns, or result queues.
 
 ### `browser-mcp.js`
 
-`browser-mcp.js` owns the backend Playwright MCP connection. It starts the
+`browser-mcp.js` owns the backend Playwright MCP connection and the one pending
+consequential browser-click confirmation. It starts the
 locally installed Playwright MCP server lazily in a headless, isolated context,
 reuses the connection, verifies its required tools at startup, and maps only
-`navigate`, `snapshot`, `find`, and `back`. It accepts only http/https
-navigation, bounds output, and normalizes MCP failures. It never forwards an
-arbitrary MCP tool name or arguments.
+`navigate`, `snapshot`, `find`, `back`, `click`, and `type`. Consequential
+clicks are stored with their exact observed ref, description, ref generation,
+and expiry instead of executing. Button-like controls require confirmation by
+default; only a small observed-label allowlist of low-risk controls may run
+immediately. Only the dedicated confirmation path can
+execute that stored action once. It accepts only http/https navigation, bounds
+output, and normalizes MCP failures. It never forwards an arbitrary MCP tool
+name or arguments.
 
 `codex-call-tracker.js` owns unresolved interactive Codex call bookkeeping and
 explicit cancellation of calls from a superseded session/turn. It receives a
@@ -151,6 +157,7 @@ does not own the WebSocket, session lifecycle, a tool implementation, or UI.
 - Codex tool-call identification, session/turn checks, and the decision to
   supersede an earlier user turn;
 - bounded browser tool-call identification and activity descriptions;
+- completed user-turn tracking and explicit browser-confirmation gating;
 - website and Calendar tool-call identification;
 - client-owned descriptions of currently running Calendar/Codex work for
   non-superseding voice status questions;

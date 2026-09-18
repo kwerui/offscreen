@@ -22,7 +22,11 @@ import {
   createCodexInspectionWorkspace,
   removeCodexInspectionWorkspace,
 } from "./codex-runner.js";
-import { runBrowserAction, validateBrowserRequest } from "./browser-mcp.js";
+import {
+  getBrowserResultStatus,
+  runBrowserAction,
+  validateBrowserRequest,
+} from "./browser-mcp.js";
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 if (!API_KEY) {
@@ -180,7 +184,7 @@ app.post("/api/browser", async (req, res) => {
 
   const result = await runBrowserAction(action, req.body);
 
-  res.status(result.success ? 200 : 502).json(result);
+  res.status(getBrowserResultStatus(result)).json(result);
 });
 
 app.post("/api/codex", async (req, res) => {

@@ -8,8 +8,13 @@ const MAX_FIND_TEXT_CHARACTERS = 512;
 const MAX_ELEMENT_DESCRIPTION_CHARACTERS = 512;
 const MAX_TYPE_TEXT_CHARACTERS = 2_000;
 const MAX_BROWSER_OUTPUT_CHARACTERS = 12_000;
+const MAX_CONFIRMATION_DESCRIPTION_CHARACTERS = 160;
 const CONFIRMATION_REQUIRED_ERROR =
-  "This browser action requires confirmation support, which is not enabled yet.";
+  "Confirmation is required before this browser action.";
+const CONFIRMATION_MISSING_ERROR =
+  "There is no pending browser action to confirm.";
+const CONFIRMATION_EXPIRED_ERROR =
+  "The pending browser confirmation expired. Request the action again.";
 const OBSERVED_REF_ERROR =
   "Browser target must be a ref from the latest page read or find result";
 const STALE_REF_ERROR =
@@ -17,7 +22,19 @@ const STALE_REF_ERROR =
 const NON_EDITABLE_TARGET_ERROR =
   "Browser type target is not editable. Read or find the page again to locate an editable field.";
 const CONSEQUENTIAL_CLICK_PATTERN =
-  /\b(delete|remove|purchase|buy|checkout|pay|donate|send|submit|publish|place order|authorize|confirm)\b/i;
+  /\b(approve|authorize|confirm|continue|delete|donate|pay|place order|publish|purchase|buy|checkout|remove|save changes|send|submit|subscribe|transfer|withdraw)\b/i;
+const STATE_CHANGING_CONTROL_PATTERN =
+  /\b(button|checkbox|radio|switch|menuitem|menuitemcheckbox|menuitemradio|option)\b/i;
+const LOW_RISK_CONTROL_NAMES = new Set([
+  "search",
+  "open",
+  "close",
+  "menu",
+  "next",
+  "previous",
+  "back",
+]);
+const CONFIRMATION_EXPIRY_MILLISECONDS = 90_000;
 
 export const BROWSER_MCP_ACTIONS = Object.freeze({
   navigate: { toolName: "browser_navigate" },
@@ -27,6 +44,14 @@ export const BROWSER_MCP_ACTIONS = Object.freeze({
   click: { toolName: "browser_click" },
   type: { toolName: "browser_type" },
 });
+
+export function getBrowserResultStatus(result) {
+  return (
+    result.success ||
+    result.confirmation_required ||
+    /^browser_confirmation_/.test(result.errorCode || "")
+  ) ? 200 : 502;
+}
 
 const require = createRequire(import.meta.url);
 const mcpRequire = createRequire(require.resolve("@playwright/mcp/package.json"));
@@ -145,6 +170,10 @@ function getTypeText(text) {
 }
 
 export function validateBrowserRequest(action, input = {}) {
+  if (action === "confirm" || action === "cancel_confirmation") {
+    return { success: true, arguments: {} };
+  }
+
   if (!BROWSER_MCP_ACTIONS[action]) {
     return { success: false, error: "Unsupported browser action" };
   }
@@ -233,6 +262,24 @@ function isEditableTargetDescription(description) {
   );
 }
 
+function getObservedControlName(description) {
+  return description.match(/"([^"]+)"/)?.[1].trim().toLowerCase() || "";
+}
+
+function requiresClickConfirmation(observedDescription) {
+  if (CONSEQUENTIAL_CLICK_PATTERN.test(observedDescription)) {
+    return true;
+  }
+
+  return (
+    STATE_CHANGING_CONTROL_PATTERN.test(observedDescription) &&
+    !(
+      /\bbutton\b/i.test(observedDescription) &&
+      LOW_RISK_CONTROL_NAMES.has(getObservedControlName(observedDescription))
+    )
+  );
+}
+
 function getMcpResultText(mcpResult) {
   return (mcpResult.content || [])
     .filter((item) => item?.type === "text" && typeof item.text === "string")
@@ -253,10 +300,42 @@ function getBoundedText(mcpResult) {
 export function createBrowserMcp({
   createClient = createDefaultClient,
   createTransport = createDefaultTransport,
+  now = () => Date.now(),
+  confirmationExpiryMilliseconds = CONFIRMATION_EXPIRY_MILLISECONDS,
 } = {}) {
   let client;
   let connectionPromise;
   let observedRefs = new Map();
+  let refGeneration = 0;
+  let pendingConfirmation = null;
+
+  function clearPendingConfirmation() {
+    pendingConfirmation = null;
+  }
+
+  function invalidateObservedRefs() {
+    observedRefs = new Map();
+    refGeneration++;
+    clearPendingConfirmation();
+  }
+
+  function getConfirmationDescription(observedDescription) {
+    const description = observedDescription
+      .replace(/\s*\[ref=[^\]]+\]\s*/i, "")
+      .replace(/^\s*[-*]\s*/, "")
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return `Click ${description}`.slice(0, MAX_CONFIRMATION_DESCRIPTION_CHARACTERS);
+  }
+
+  function getMissingConfirmationResult() {
+    return {
+      success: false,
+      error: CONFIRMATION_MISSING_ERROR,
+      errorCode: "browser_confirmation_missing",
+    };
+  }
 
   async function getConnectedClient() {
     if (connectionPromise) {
@@ -295,6 +374,69 @@ export function createBrowserMcp({
       return validation;
     }
 
+    if (action === "cancel_confirmation") {
+      const cancelled = Boolean(pendingConfirmation);
+      clearPendingConfirmation();
+      return { success: true, cancelled };
+    }
+
+    if (action === "confirm") {
+      const confirmation = pendingConfirmation;
+
+      if (!confirmation) {
+        return getMissingConfirmationResult();
+      }
+
+      if (now() - confirmation.createdAt > confirmationExpiryMilliseconds) {
+        clearPendingConfirmation();
+        return {
+          success: false,
+          error: CONFIRMATION_EXPIRED_ERROR,
+          errorCode: "browser_confirmation_expired",
+        };
+      }
+
+      if (
+        confirmation.refGeneration !== refGeneration ||
+        !observedRefs.has(confirmation.arguments.target)
+      ) {
+        clearPendingConfirmation();
+        return {
+          success: false,
+          error: STALE_REF_ERROR,
+          errorCode: "browser_confirmation_stale",
+        };
+      }
+
+      // Consume before calling MCP so confirmation is strictly one-shot,
+      // including if the page action fails or is retried by the model.
+      clearPendingConfirmation();
+      invalidateObservedRefs();
+
+      try {
+        const connectedClient = await getConnectedClient();
+        const result = await connectedClient.callTool({
+          name: BROWSER_MCP_ACTIONS.click.toolName,
+          arguments: confirmation.arguments,
+        });
+
+        if (result.isError) {
+          return {
+            success: false,
+            error: STALE_REF_ERROR,
+            errorCode: isStaleRefError(getMcpResultText(result))
+              ? "browser_ref_stale"
+              : "browser_interaction_failed",
+          };
+        }
+
+        return { success: true, content: getBoundedText(result) };
+      } catch {
+        console.error("Browser MCP confirmation failed");
+        return { success: false, error: "Browser action failed" };
+      }
+    }
+
     if ((action === "click" || action === "type") && !observedRefs.has(validation.arguments.target)) {
       return { success: false, error: OBSERVED_REF_ERROR };
     }
@@ -302,8 +444,22 @@ export function createBrowserMcp({
     if (action === "click") {
       const observedDescription = observedRefs.get(validation.arguments.target);
 
-      if (CONSEQUENTIAL_CLICK_PATTERN.test(observedDescription)) {
-        return { success: false, error: CONFIRMATION_REQUIRED_ERROR };
+      if (requiresClickConfirmation(observedDescription)) {
+        // Replace any earlier pending action with this exact observed click.
+        pendingConfirmation = {
+          action: "click",
+          arguments: { ...validation.arguments },
+          description: getConfirmationDescription(observedDescription),
+          refGeneration,
+          createdAt: now(),
+        };
+        return {
+          success: false,
+          confirmation_required: true,
+          error: CONFIRMATION_REQUIRED_ERROR,
+          errorCode: "browser_confirmation_required",
+          description: pendingConfirmation.description,
+        };
       }
     }
 
@@ -321,7 +477,7 @@ export function createBrowserMcp({
 
     // Page-changing actions can invalidate refs even when Playwright reports an error.
     if (action === "navigate" || action === "back" || action === "click") {
-      observedRefs = new Map();
+      invalidateObservedRefs();
     }
 
     try {
@@ -333,7 +489,7 @@ export function createBrowserMcp({
 
       if (result.isError) {
         if (action === "click" || action === "type") {
-          observedRefs = new Map();
+          invalidateObservedRefs();
           const errorText = getMcpResultText(result);
           const errorCode = isStaleRefError(errorText)
             ? "browser_ref_stale"
@@ -354,10 +510,12 @@ export function createBrowserMcp({
 
       if (action === "snapshot" || action === "find") {
         observedRefs = getObservedRefs(content);
+        refGeneration++;
+        clearPendingConfirmation();
       }
 
       if (action === "type") {
-        observedRefs = new Map();
+        invalidateObservedRefs();
       }
 
       return {

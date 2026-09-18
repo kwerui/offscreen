@@ -43,3 +43,24 @@ test("returns a normalized browser API failure", async () => {
     });
   });
 });
+
+test("preserves safe browser confirmation results", async () => {
+  await withMockFetch(async () => ({
+    ok: false,
+    json: async () => ({
+      success: false,
+      confirmation_required: true,
+      error: "Confirmation is required before this browser action.",
+      errorCode: "browser_confirmation_required",
+      description: "Delete this item",
+    }),
+  }), async () => {
+    assert.deepEqual(await runBrowserTool("click", { target: "e12" }), {
+      success: false,
+      confirmation_required: true,
+      error: "Confirmation is required before this browser action.",
+      errorCode: "browser_confirmation_required",
+      description: "Delete this item",
+    });
+  });
+});

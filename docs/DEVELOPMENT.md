@@ -132,7 +132,9 @@ matching implementation:
 - `browser_navigate`, `browser_read_page`, `browser_find_on_page`,
   `browser_go_back`, `browser_click`, and `browser_type` call the local browser
   route. Its backend adapter owns a lazy, reused Playwright MCP connection and
-  exposes only those six actions.
+  exposes only those six actions. A consequential `browser_click` stores its
+  exact observed target without clicking; `browser_confirm_action` can execute
+  only that stored action after a later explicit affirmative user turn.
 
 The browser packages the outcome as a `tool.result` message for AssemblyAI.
 AssemblyAI then uses that result to speak its answer.
@@ -216,8 +218,11 @@ The Playwright MCP integration runs the locally installed `@playwright/mcp`
 server lazily in a headless, isolated context. It permits only explicit
 http/https navigation, page accessibility snapshots, literal text finding,
 browser history back, and click/type on refs observed in the latest snapshot or
-find output. Typing never submits; clicks whose observed descriptions indicate
-consequential actions are unavailable until confirmation support exists. It
+find output. Typing never submits. Consequential clicks create one short-lived
+pending action. Button-like controls require confirmation unless their observed
+label is in the small low-risk allowlist. The original request is never
+confirmation, a negative cancels it, and the dedicated no-argument confirmation
+tool consumes the exact stored action once. It
 does not permit forms, arbitrary evaluation, downloads, uploads, or arbitrary
 MCP forwarding.
 

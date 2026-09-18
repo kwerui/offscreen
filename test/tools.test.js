@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { VOICE_TOOLS } from "../public/tools.js";
 
-test("defines the six bounded browser voice tools", () => {
+test("defines the bounded browser voice tools", () => {
   const browserTools = [
     ["browser_navigate", ["url"]],
     ["browser_read_page", []],
@@ -10,6 +10,7 @@ test("defines the six bounded browser voice tools", () => {
     ["browser_go_back", []],
     ["browser_click", ["target"]],
     ["browser_type", ["target", "text"]],
+    ["browser_confirm_action", []],
   ];
 
   for (const [name, required] of browserTools) {
@@ -25,10 +26,25 @@ test("describes safe ref-only browser interaction", () => {
   const typeTool = VOICE_TOOLS.find((tool) => tool.name === "browser_type");
 
   assert.match(clickTool.description, /ref.*browser_read_page|browser_read_page.*ref/i);
-  assert.match(clickTool.description, /consequential.*unavailable|unavailable.*confirmation/i);
+  assert.match(clickTool.description, /consequential.*confirmation|confirmation.*consequential/i);
   assert.match(clickTool.description, /never repeat.*failed click.*refreshed/i);
   assert.match(typeTool.description, /never submits/i);
   assert.match(typeTool.description, /not editable.*read or find/i);
+});
+
+test("defines a no-argument browser_confirm_action voice tool", () => {
+  const confirmTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "browser_confirm_action"
+  );
+
+  assert.ok(confirmTool);
+  assert.deepEqual(confirmTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(confirmTool.description, /pending.*action/i);
+  assert.match(confirmTool.description, /no.*ref|no.*target/i);
 });
 
 test("defines a no-argument disconnect_session voice tool", () => {

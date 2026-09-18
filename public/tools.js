@@ -192,9 +192,10 @@ export const VOICE_TOOLS = [
     name: "browser_click",
 
     description:
-      "Click one harmless page element using only a ref returned by browser_read_page or browser_find_on_page. " +
+      "Click one page element using only a ref returned by browser_read_page or browser_find_on_page. " +
+      "Button-like action controls require confirmation by default; only clearly low-risk Search, Open, Close, Menu, Next, Previous, or Back controls may click immediately. " +
       "If the page or ref changed, read or find it again before retrying; never repeat the same failed click without refreshed page state. " +
-      "Do not use for delete, purchase, send, submit, publish, account confirmation, or any consequential action: those are unavailable until confirmation is implemented.",
+      "For delete, purchase, send, submit, publish, account confirmation, or another consequential action, call this first: it will request confirmation without clicking.",
 
     parameters: {
       type: "object",
@@ -209,6 +210,25 @@ export const VOICE_TOOLS = [
         },
       },
       required: ["target"],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
+    name: "browser_confirm_action",
+
+    description:
+      "Confirm only the one pending consequential browser action after the user gives a separate explicit affirmative response. " +
+      "This tool takes no ref, target, selector, URL, or replacement action. Never call it from the original action request, automatically, or after a negative, ambiguous, unrelated, expired, stale, or already-used confirmation.",
+
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
     },
 
     execution_mode: "hold",

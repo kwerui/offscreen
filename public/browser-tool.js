@@ -15,6 +15,8 @@ export async function runBrowserTool(action, input = {}) {
         success: false,
         error: data.error || "Browser action failed",
         ...(data.errorCode ? { errorCode: data.errorCode } : {}),
+        ...(data.confirmation_required ? { confirmation_required: true } : {}),
+        ...(data.description ? { description: data.description } : {}),
       };
     }
 

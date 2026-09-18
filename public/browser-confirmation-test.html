@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Browser confirmation test page</title>
+    <link rel="icon" href="data:,">
+  </head>
+  <body>
+    <h1>Harmless browser confirmation test page</h1>
+    <p id="result">No consequential action has run.</p>
+    <button type="button" id="delete" onclick="record('Delete item')">Delete item</button>
+    <button type="button" id="submit" onclick="record('Submit')">Submit</button>
+    <button type="button" id="send" onclick="record('Send')">Send</button>
+    <button type="button" id="buy" onclick="record('Buy')">Buy</button>
+    <a href="#ordinary-link" id="ordinary-link">Ordinary link</a>
+    <script>
+      let count = 0;
+      function record(action) {
+        count += 1;
+        document.getElementById('result').textContent = `${action} ran ${count} time(s).`;
+      }
+    </script>
+  </body>
+</html>
