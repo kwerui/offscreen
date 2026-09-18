@@ -172,12 +172,18 @@ After the tool returns, summarize its result briefly.
 
       <div class="controls">
         <button class="primary" id="connect">Connect</button>
+        <button id="voice-wake">Enable voice wake</button>
         <button class="danger" id="disconnect" disabled>
           Disconnect
         </button>
         <button id="resume-listening" disabled>Resume listening</button>
         <button id="clear">Clear transcript</button>
       </div>
+
+      <p class="wake-note">
+        Voice wake uses browser speech recognition and may process microphone
+        audio online while Offscreen is disconnected.
+      </p>
 
       <div class="transcript" id="transcript">
         <div class="empty" id="empty">

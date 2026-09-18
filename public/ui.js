@@ -1,6 +1,7 @@
 const els = {
   connect: document.getElementById("connect"),
   disconnect: document.getElementById("disconnect"),
+  voiceWake: document.getElementById("voice-wake"),
   resumeListening: document.getElementById("resume-listening"),
   clear: document.getElementById("clear"),
   voice: document.getElementById("voice"),
@@ -30,6 +31,18 @@ export function setConnectButtonDisabled(disabled) {
 
 export function setDisconnectButtonDisabled(disabled) {
   els.disconnect.disabled = disabled;
+}
+
+export function setVoiceWakeButtonState(enabled, disabled = false) {
+  els.voiceWake.textContent = enabled
+    ? "Disable voice wake"
+    : "Enable voice wake";
+  els.voiceWake.disabled = disabled;
+}
+
+export function setVoiceWakeUnavailable() {
+  els.voiceWake.textContent = "Voice wake unavailable";
+  els.voiceWake.disabled = true;
 }
 
 export function setResumeListeningButtonDisabled(disabled) {
@@ -175,10 +188,16 @@ export function clearToolStatus(sessionId, toolTurnId) {
   toolStatusTurnId = null;
 }
 
-export function bindControls(onConnect, onDisconnect, onResumeListening) {
+export function bindControls(
+  onConnect,
+  onDisconnect,
+  onResumeListening,
+  onVoiceWake
+) {
   els.connect.addEventListener("click", onConnect);
   els.disconnect.addEventListener("click", onDisconnect);
   els.resumeListening.addEventListener("click", onResumeListening);
+  els.voiceWake.addEventListener("click", onVoiceWake);
   els.clear.addEventListener("click", clearTranscript);
 }
 

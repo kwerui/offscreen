@@ -33,6 +33,10 @@ Document and preserve the functionality already present:
 - The agent can ask a locally installed Codex CLI to inspect the local project
   in read-only mode.
 - The browser displays connection status and user/agent transcripts.
+- The user can explicitly enable browser voice wake while disconnected and say
+  “Connect Offscreen” to start the normal voice session. Wake recognition is
+  stopped while connecting/connected and resumes after disconnect while the
+  option remains enabled.
 - The browser shows activity/status feedback during long-running tool calls,
   such as while Codex is inspecting the project.
 - The agent can end the active voice session when the user explicitly asks to

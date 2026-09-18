@@ -8,6 +8,7 @@ The product should let users complete routine digital tasks with minimal screen 
 
 Current core features:
 - AssemblyAI voice interaction
+- optional browser voice wake for the exact phrase "Connect Offscreen"
 - voice-controlled website opening
 - Google Calendar read-only queries
 - natural-language date parsing
@@ -74,6 +75,10 @@ Current structure:
 - `public/voice-session.js`
   - AssemblyAI temporary-token and WebSocket connection lifecycle
   - raw WebSocket message transport
+
+- `public/wake-listener.js`
+  - optional disconnected-state browser speech recognition
+  - exact wake-phrase matching for "Connect Offscreen"
 
 - `public/pcm-processor.js`
   - microphone PCM audio processing

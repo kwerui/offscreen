@@ -70,7 +70,7 @@ function createElement() {
 function setUpBrowserEnvironment() {
   const elements = new Map();
   for (const id of [
-    "connect", "disconnect", "resume-listening", "clear", "voice", "prompt",
+    "connect", "disconnect", "voice-wake", "resume-listening", "clear", "voice", "prompt",
     "greeting", "transcript", "empty", "status-dot", "status-text",
   ]) {
     elements.set(id, createElement());

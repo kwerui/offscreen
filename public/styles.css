@@ -127,8 +127,15 @@ textarea {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.wake-note {
+  margin: -8px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 button {

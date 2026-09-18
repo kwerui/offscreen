@@ -9,6 +9,8 @@ import {
   setDisconnectButtonDisabled,
   setResumeListeningButtonDisabled,
   setStatus,
+  setVoiceWakeButtonState,
+  setVoiceWakeUnavailable,
   showToolStatus,
   updateUserPartialTranscript,
 } from "./ui.js";
@@ -27,10 +29,13 @@ import { runCodexTask } from "./codex-tool.js";
 import { createCodexCallTracker } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
+import { createWakeListener } from "./wake-listener.js";
 
 let activeSessionId = 0;
 
 let standbyMode = false;
+
+let voiceWakeEnabled = false;
 
 let normalSystemPrompt = "";
 
@@ -83,6 +88,11 @@ const STANDBY_DISCONNECT_COMMANDS = new Set([
   "end the session",
   "hang up",
 ]);
+
+const VOICE_WAKE_PHRASE = "connect offscreen";
+
+const VOICE_WAKE_STATUS =
+  'Disconnected — browser speech recognition is listening for “Connect Offscreen”';
 
 function isActiveSession(sessionId) {
   return sessionId === activeSessionId;
@@ -168,6 +178,52 @@ function leaveStandby() {
 
 const voiceSession = createVoiceSession();
 
+function handleVoiceWake() {
+  if (
+    !voiceWakeEnabled ||
+    voiceSession.hasConnection() ||
+    hasAudioResources()
+  ) {
+    return;
+  }
+
+  void connect();
+}
+
+function handleVoiceWakeError(error) {
+  console.warn("Voice wake error:", error);
+
+  voiceWakeEnabled = false;
+  updateVoiceWakeButton();
+
+  let statusText = `Voice wake error (${error})`;
+
+  if (error === "audio-capture") {
+    statusText = "Voice wake microphone unavailable";
+  } else if (error === "not-allowed" || error === "service-not-allowed") {
+    statusText = "Voice wake permission denied";
+  }
+
+  setStatus("error", statusText);
+}
+
+const wakeListener = createWakeListener({
+  phrase: VOICE_WAKE_PHRASE,
+  onWake: handleVoiceWake,
+  onError: handleVoiceWakeError,
+});
+
+function updateVoiceWakeButton(disabled = false) {
+  if (!wakeListener.isSupported()) {
+    setVoiceWakeUnavailable();
+    return;
+  }
+
+  setVoiceWakeButtonState(voiceWakeEnabled, disabled);
+}
+
+updateVoiceWakeButton();
+
 const codexCallTracker = createCodexCallTracker({
   sendCancellationResult: (sessionId, toolTurnId, callId, result) => {
     const wasSent = sendToolResult(
@@ -252,13 +308,15 @@ function endActiveSession(statusState = "", statusText = "Disconnected") {
 async function connect() {
   const sessionId = activeSessionId + 1;
 
+  wakeListener.stop();
   resetStoredAgentResponses();
   standbyMode = false;
   setResumeListeningButtonDisabled(true);
+  updateVoiceWakeButton(true);
 
   if (voiceSession.hasConnection() || hasAudioResources()) {
     activeSessionId = sessionId;
-    teardown();
+    teardown("", "Disconnected", false);
   } else {
     activeSessionId = sessionId;
   }
@@ -402,6 +460,7 @@ function handleEvent(event, sessionId) {
 
       setDisconnectButtonDisabled(false);
       setResumeListeningButtonDisabled(true);
+      updateVoiceWakeButton();
 
       startMicrophoneCapture();
 
@@ -785,7 +844,11 @@ function sendToolResult(
   return true;
 }
 
-function teardown(statusState = "", statusText = "Disconnected") {
+function teardown(
+  statusState = "",
+  statusText = "Disconnected",
+  restartVoiceWake = true
+) {
   invalidateToolTurn();
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
@@ -800,10 +863,46 @@ function teardown(statusState = "", statusText = "Disconnected") {
   setConnectButtonDisabled(false);
   setDisconnectButtonDisabled(true);
   setResumeListeningButtonDisabled(true);
+  updateVoiceWakeButton();
+
+  if (restartVoiceWake && voiceWakeEnabled && wakeListener.start()) {
+    const wakeStatusText = statusState
+      ? `${statusText} — voice wake is still listening for “Connect Offscreen”`
+      : VOICE_WAKE_STATUS;
+
+    setStatus(statusState, wakeStatusText);
+  }
 }
 
 function disconnect() {
   endActiveSession();
 }
 
-bindControls(connect, disconnect, leaveStandby);
+function toggleVoiceWake() {
+  if (!wakeListener.isSupported()) {
+    return;
+  }
+
+  voiceWakeEnabled = !voiceWakeEnabled;
+  updateVoiceWakeButton();
+
+  if (!voiceWakeEnabled) {
+    wakeListener.stop();
+
+    if (!voiceSession.hasConnection() && !hasAudioResources()) {
+      setStatus("", "Disconnected");
+    }
+
+    return;
+  }
+
+  if (voiceSession.hasConnection() || hasAudioResources()) {
+    return;
+  }
+
+  if (wakeListener.start()) {
+    setStatus("", VOICE_WAKE_STATUS);
+  }
+}
+
+bindControls(connect, disconnect, leaveStandby, toggleVoiceWake);

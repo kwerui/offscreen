@@ -28,6 +28,7 @@ public/
   styles.css              Page styles
   app.js                  Browser orchestration, event semantics, and tool dispatch
   voice-session.js        AssemblyAI transport and connection lifecycle
+  wake-listener.js        Optional disconnected-state browser speech recognition
   codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
   tool-result-coordinator.js  Generic tool-result queue/task coordination
   audio.js                Microphone capture and PCM playback
@@ -89,6 +90,12 @@ playback, interruption, and audio cleanup.
 creation and closure, raw parsed inbound events, and JSON outbound messages.
 It does not know about UI, tool names, tool turns, active session IDs, or
 event meaning.
+
+`wake-listener.js` owns the optional browser `SpeechRecognition`/
+`webkitSpeechRecognition` lifecycle while Offscreen is disconnected. It
+matches only the configured wake phrase, restarts after an unexpected normal
+end while wake mode remains enabled, and stops before the normal AssemblyAI
+connection begins. It does not hold an AssemblyAI token or WebSocket.
 
 `website-tool.js` owns supported-site lookup and opening allowlisted URLs in a
 new browser tab.
@@ -227,8 +234,9 @@ local development/demo environment.
 
 ## Current frontend/backend boundary
 
-The browser owns user interface, microphone capture, audio playback, AssemblyAI
-WebSocket communication, browser-only actions, and transcript display.
+The browser owns user interface, microphone capture, audio playback, optional
+disconnected-state speech recognition for voice wake, AssemblyAI WebSocket
+communication, browser-only actions, and transcript display.
 
 The backend owns secrets, AssemblyAI token minting, Google OAuth credentials,
 Google Calendar access, Codex process execution, server-side validation, and
@@ -240,6 +248,7 @@ code.
 | Integration | Current use | Boundary |
 | --- | --- | --- |
 | AssemblyAI Voice Agent | Conversation, transcription, reply audio, and tool calls | Browser holds only a temporary token; server holds the API key. |
+| Browser speech recognition | Optional disconnected-state “Connect Offscreen” wake phrase | Browser-only feature; may use a browser/vendor online recognition service. |
 | Google Calendar API | Read-only Calendar queries | Server-only OAuth and API client. |
 | Codex CLI | Read-only local repository inspection | Server starts the local process; browser receives a result. |
 | Browser tabs | Opening a small allowlist of websites | Browser-only action; no backend needed. |

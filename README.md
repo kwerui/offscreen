@@ -12,6 +12,10 @@ Codex CLI to inspect the current project.
 ## Current features
 
 - Voice conversation through the AssemblyAI Voice Agent API.
+- Optional voice wake while disconnected: explicitly enable **Voice wake** in
+  the UI, then say “Connect Offscreen” to start the normal AssemblyAI session.
+  The browser wake listener stops while Offscreen is connecting or connected
+  and starts again after disconnect while the option remains enabled.
 - Natural voice interruption: Voice Agent input uses `interrupt_response: true`,
   so when a user begins a real interruption while Offscreen is speaking,
   AssemblyAI marks the reply interrupted and Offscreen flushes queued browser
@@ -78,6 +82,9 @@ session/turn checks, and the decision to supersede an earlier turn.
 `public/voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
 connection lifecycle, and raw message transport. `public/codex-call-tracker.js` owns
 Codex interactive-call tracking and explicit supersession/cancellation.
+`public/wake-listener.js` owns the optional disconnected-state browser speech
+recognition and exact wake-phrase matching; it does not use the AssemblyAI
+session.
 The frontend will continue to be separated incrementally while preserving the
 working voice flow.
 
@@ -99,6 +106,8 @@ working voice flow.
 - Google OAuth desktop-client credentials
 - Codex CLI installed and authenticated if using the Codex voice tool
 - A modern browser with microphone permission available
+- A browser exposing `SpeechRecognition` or `webkitSpeechRecognition` if using
+  optional voice wake
 
 ### Install and configure
 
@@ -159,6 +168,11 @@ local project inspection, not project modification.
   unauthenticated Codex endpoint, are not exposed to other devices on the
   local network.
 - Microphone audio is sent to AssemblyAI for voice-agent processing.
+- Voice wake is separate from AssemblyAI. When the user explicitly enables it
+  while disconnected, browser speech recognition listens for “Connect
+  Offscreen.” Depending on the browser, that recognition may process microphone
+  audio using an online browser/vendor service. The UI states when wake
+  listening is active.
 - Calendar results and Codex tool results flow through the AssemblyAI voice
   session so the agent can produce its response.
 - AssemblyAI API keys and Google OAuth credentials stay on the local server;
@@ -170,9 +184,10 @@ local project inspection, not project modification.
 npm test
 ```
 
-The suite uses Node's built-in test runner and currently has 11 deterministic
-Calendar parsing and timezone tests. It does not replace manual verification
-of microphone, AssemblyAI, Google OAuth, Calendar, or Codex integrations.
+The suite uses Node's built-in test runner and covers deterministic Calendar,
+tool, session, standby, repeat/summarize, and voice-wake behavior. It does not
+replace manual verification of microphone, browser speech recognition,
+AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 
 ## Current limitations
 
@@ -183,9 +198,13 @@ of microphone, AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 - Google Calendar requires local OAuth setup.
 - Browser popup settings can prevent a supported website from opening in a new
   tab.
+- Voice wake depends on browser speech-recognition support and may require an
+  online recognition service; unsupported browsers show the control as
+  unavailable.
 
 ## Demo focus
 
 Offscreen is intentionally scoped for a dependable hackathon demo: speak to
-the agent, open a supported destination, check a real Calendar, and ask Codex
-about the local project without relying on broad computer automation.
+the agent, optionally reconnect hands-free with “Connect Offscreen,” open a
+supported destination, check a real Calendar, and ask Codex about the local
+project without relying on broad computer automation.
