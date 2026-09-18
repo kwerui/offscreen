@@ -126,6 +126,8 @@ does not own the WebSocket, session lifecycle, a tool implementation, or UI.
 - Codex tool-call identification, session/turn checks, and the decision to
   supersede an earlier user turn;
 - website and Calendar tool-call identification;
+- client-owned descriptions of currently running Calendar/Codex work for
+  non-superseding voice status questions;
 - tool-result message composition for normal flushing and explicit Codex
   cancellation results.
 
@@ -263,11 +265,13 @@ These are audit findings, not evidence that every path currently fails.
   invalidates that ID before closing the socket and releasing microphone/audio
   resources, so callbacks from an older connection are ignored.
 - Each tool call captures its originating `sessionId` and `toolTurnId`.
-  Each non-empty finalized user transcript starts a new tool generation.
-  Late Calendar or Codex completions from an older turn are ignored instead of
-  altering a newer turn's queue, counters, tool results, or status display.
-  Before the turn changes, a superseded interactive Codex call is explicitly
-  resolved with its original `call_id`.
+  Ordinary non-empty finalized user transcripts start a new tool generation.
+  A small exact set of current-activity questions is the deliberate exception:
+  those questions use client-owned running-work context and do not supersede the
+  work they ask about. Late Calendar or Codex completions from an older turn are
+  ignored instead of altering a newer turn's queue, counters, tool results, or
+  status display. Before an ordinary turn change, a superseded interactive
+  Codex call is explicitly resolved with its original `call_id`.
 - The Codex route now limits each local process to 40 seconds, below the
   voice tool's 45-second timeout. It also limits task and captured-output size
   and uses one response guard so timeout, process error, and close events do

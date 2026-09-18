@@ -53,6 +53,8 @@ let pendingAgentResponse = null;
 
 let isAgentReplyOpen = false;
 
+const activeActivities = new Map();
+
 const FIXED_OFFSCREEN_INSTRUCTIONS =
   "When the user explicitly asks Offscreen to repeat its most recent response, " +
   "ALWAYS call repeat_last_response rather than repeating from conversation " +
@@ -68,7 +70,10 @@ const FIXED_OFFSCREEN_INSTRUCTIONS =
   "any other tool, and answer directly without a preface when possible. When it " +
   "fails, briefly state that no completed response is available. When the user " +
   "explicitly asks Offscreen to pause listening, stop listening, or go on standby, " +
-  "ALWAYS call pause_listening.";
+  "ALWAYS call pause_listening. When the user asks what Offscreen is currently " +
+  "doing, working on, or running, answer only from the Current Offscreen activity " +
+  "context in the system prompt. Do not call a tool, advertise capabilities, or " +
+  "reinterpret that question as a new task. If nothing is running, say so briefly.";
 
 const STANDBY_INSTRUCTIONS =
   "You are in standby. Do not answer questions, start tools, or perform normal " +
@@ -89,6 +94,22 @@ const STANDBY_DISCONNECT_COMMANDS = new Set([
   "hang up",
 ]);
 
+const CURRENT_ACTIVITY_QUERIES = new Set([
+  "what are you doing",
+  "what're you doing",
+  "what you're doing",
+  "what are you doing now",
+  "what are you doing right now",
+  "what are you currently doing",
+  "what are you working on",
+  "what're you working on",
+  "what is happening",
+  "what's happening",
+  "what is running",
+  "what's running",
+  "what are you up to",
+]);
+
 const VOICE_WAKE_PHRASE = "connect offscreen";
 
 const VOICE_WAKE_STATUS =
@@ -104,12 +125,29 @@ function isActiveToolTurn(sessionId, toolTurnId) {
   );
 }
 
+function getCurrentActivityText() {
+  const descriptions = [
+    ...new Set(
+      [...activeActivities.values()].map((activity) => activity.description)
+    ),
+  ];
+
+  if (descriptions.length === 0) {
+    return "Nothing is running right now.";
+  }
+
+  return descriptions.join(" ");
+}
+
 function getSystemPrompt() {
+  const activityContext = normalSystemPrompt
+    ? `\n\nCurrent Offscreen activity: ${getCurrentActivityText()}`
+    : "";
   const standbyInstructions = standbyMode
     ? `\n\n${STANDBY_INSTRUCTIONS}`
     : "";
 
-  return `${normalSystemPrompt}${standbyInstructions}`;
+  return `${normalSystemPrompt}${activityContext}${standbyInstructions}`;
 }
 
 function updateSystemPrompt() {
@@ -120,6 +158,65 @@ function updateSystemPrompt() {
       tools: standbyMode ? [] : VOICE_TOOLS,
     },
   });
+}
+
+function syncCurrentActivityPrompt() {
+  if (!normalSystemPrompt || !voiceSession.isOpen()) {
+    return;
+  }
+
+  updateSystemPrompt();
+}
+
+function startActivity(sessionId, toolTurnId, callId, description) {
+  if (!isActiveToolTurn(sessionId, toolTurnId)) {
+    return;
+  }
+
+  activeActivities.set(callId, {
+    sessionId,
+    toolTurnId,
+    description,
+  });
+  syncCurrentActivityPrompt();
+}
+
+function finishActivity(sessionId, toolTurnId, callId) {
+  const activity = activeActivities.get(callId);
+
+  if (
+    !activity ||
+    activity.sessionId !== sessionId ||
+    activity.toolTurnId !== toolTurnId
+  ) {
+    return;
+  }
+
+  activeActivities.delete(callId);
+  syncCurrentActivityPrompt();
+}
+
+function clearActivities(updatePrompt = true) {
+  if (activeActivities.size === 0) {
+    return;
+  }
+
+  activeActivities.clear();
+
+  if (updatePrompt) {
+    syncCurrentActivityPrompt();
+  }
+}
+
+function isCurrentActivityQuery(text) {
+  const normalizedText = text
+    ?.trim()
+    .toLowerCase()
+    .replace(/’/g, "'")
+    .replace(/[.?!]+$/, "")
+    .replace(/\s+/g, " ");
+
+  return CURRENT_ACTIVITY_QUERIES.has(normalizedText);
 }
 
 function getStandbyCommand(text) {
@@ -266,11 +363,12 @@ const toolResultCoordinator = createToolResultCoordinator({
   },
 });
 
-function invalidateToolTurn() {
+function invalidateToolTurn(updateActivityPrompt = true) {
   activeToolTurnId++;
   pendingDisconnect = null;
   toolResultCoordinator.reset();
   clearToolStatus();
+  clearActivities(updateActivityPrompt);
 }
 
 function resetStoredAgentResponses() {
@@ -496,6 +594,11 @@ function handleEvent(event, sessionId) {
         }
 
         return;
+      }
+
+      if (event.text?.trim() && isCurrentActivityQuery(event.text)) {
+        finalizeUserTranscript(event.text);
+        break;
       }
 
       if (event.text?.trim()) {
@@ -744,14 +847,25 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // ---------------------------------
 
   if (event.name === "get_calendar_events") {
-    const result = await getCalendarEvents(event.arguments?.when);
-
-    toolResultCoordinator.queueResult(
+    startActivity(
       sessionId,
       toolTurnId,
       event.call_id,
-      result
+      "Checking your calendar."
     );
+
+    try {
+      const result = await getCalendarEvents(event.arguments?.when);
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
 
     return;
   }
@@ -774,15 +888,26 @@ async function handleToolCall(event, sessionId, toolTurnId) {
       );
     }
 
-    const result = await runCodexTask(task);
-    clearToolStatus(sessionId, toolTurnId);
-
-    toolResultCoordinator.queueResult(
+    startActivity(
       sessionId,
       toolTurnId,
       event.call_id,
-      result
+      "Codex is checking your project."
     );
+
+    try {
+      const result = await runCodexTask(task);
+      clearToolStatus(sessionId, toolTurnId);
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
 
     return;
   }
@@ -849,7 +974,7 @@ function teardown(
   statusText = "Disconnected",
   restartVoiceWake = true
 ) {
-  invalidateToolTurn();
+  invalidateToolTurn(false);
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
   resetStoredAgentResponses();

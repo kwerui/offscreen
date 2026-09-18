@@ -33,6 +33,9 @@ Codex CLI to inspect the current project.
   response.
 - Explicit voice summarize/shorten: ask Offscreen to summarize or shorten its
   most recent completed response.
+- Current-activity reporting: while Calendar or Codex work is running, ask what
+  Offscreen is doing or working on. The status question does not supersede the
+  in-progress work; ordinary new requests still do.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
@@ -185,7 +188,7 @@ npm test
 ```
 
 The suite uses Node's built-in test runner and covers deterministic Calendar,
-tool, session, standby, repeat/summarize, and voice-wake behavior. It does not
+tool, session, standby, repeat/summarize, current-activity, and voice-wake behavior. It does not
 replace manual verification of microphone, browser speech recognition,
 AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 

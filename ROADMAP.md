@@ -39,6 +39,9 @@ Document and preserve the functionality already present:
   option remains enabled.
 - The browser shows activity/status feedback during long-running tool calls,
   such as while Codex is inspecting the project.
+- The user can ask what Offscreen is currently doing while Calendar or Codex
+  work is running without superseding that work; ordinary new requests retain
+  the existing supersession behavior.
 - The agent can end the active voice session when the user explicitly asks to
   disconnect.
 - The agent can cancel current in-progress tool work when the user explicitly
@@ -159,7 +162,7 @@ during cleanup work without a focused feature specification.
 
 ### Voice / session control
 
-- Report the current activity or running tool by voice.
+Current-activity reporting is implemented in the working baseline.
 
 ### Developer workspace
 

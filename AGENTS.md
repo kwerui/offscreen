@@ -13,6 +13,7 @@ Current core features:
 - Google Calendar read-only queries
 - natural-language date parsing
 - local Codex read-only repository inspection
+- voice reporting of currently running Calendar/Codex work without superseding it
 - session and tool-turn isolation for asynchronous tool results
 
 Planned features, including Gmail and broader developer workflows, are not
