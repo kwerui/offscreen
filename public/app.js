@@ -30,6 +30,7 @@ import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { getGitStatus } from "./git-status-tool.js";
 import {
+  openProjectFile,
   readProjectFile,
   searchProject,
 } from "./project-workspace-tool.js";
@@ -76,6 +77,8 @@ const activeActivities = new Map();
 let completedUserTurnId = 0;
 
 let latestCompletedUserTurn = null;
+
+const projectFileOpenAttempts = new Set();
 
 let pendingBrowserConfirmation = null;
 
@@ -251,6 +254,15 @@ function recordCompletedUserTurn(text) {
 
   completedUserTurnId++;
   latestCompletedUserTurn = { id: completedUserTurnId, text };
+  projectFileOpenAttempts.clear();
+}
+
+function getProjectFileOpenAttemptKey(path, line) {
+  return JSON.stringify({
+    userTurnId: latestCompletedUserTurn?.id ?? 0,
+    path: path ?? null,
+    line: line ?? null,
+  });
 }
 
 function getCurrentActivityText() {
@@ -1244,6 +1256,54 @@ async function handleToolCall(event, sessionId, toolTurnId) {
         event.arguments?.path,
         event.arguments?.start_line,
         event.arguments?.end_line
+      );
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
+
+  if (event.name === "open_project_file") {
+    const attemptKey = getProjectFileOpenAttemptKey(
+      event.arguments?.path,
+      event.arguments?.line
+    );
+
+    if (projectFileOpenAttempts.has(attemptKey)) {
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        {
+          success: false,
+          error: "This project file opening request was already handled.",
+          terminal: true,
+        }
+      );
+      return;
+    }
+
+    projectFileOpenAttempts.add(attemptKey);
+
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Opening a project file in VS Code."
+    );
+
+    try {
+      const result = await openProjectFile(
+        event.arguments?.path,
+        event.arguments?.line
       );
 
       toolResultCoordinator.queueResult(

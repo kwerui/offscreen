@@ -36,6 +36,7 @@ import {
   readProjectFile,
   searchProject,
 } from "./project-workspace.js";
+import { openProjectFile } from "./project-vscode.js";
 import { runProjectTests } from "./project-tests.js";
 
 const PORT = process.env.PORT || 3000;
@@ -55,6 +56,7 @@ export function createApp({
   gitStatusImpl = getGitStatus,
   projectSearchImpl = searchProject,
   projectReadFileImpl = readProjectFile,
+  projectOpenFileImpl = openProjectFile,
   projectWorkspaceRoot = __dirname,
   projectTestImpl = runProjectTests,
   projectTestRoot = __dirname,
@@ -434,6 +436,16 @@ app.post("/api/developer/read-file", async (req, res) => {
     path: req.body?.path,
     startLine: req.body?.start_line,
     endLine: req.body?.end_line,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/open-file", async (req, res) => {
+  const result = await projectOpenFileImpl({
+    projectRoot: projectWorkspaceRoot,
+    path: req.body?.path,
+    line: req.body?.line,
   });
 
   res.status(result.success ? 200 : 400).json(result);

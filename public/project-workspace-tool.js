@@ -1,4 +1,4 @@
-async function requestProjectWorkspace(path, body, errorMessage) {
+async function requestProjectWorkspace(path, body, errorMessage, terminalErrors = []) {
   try {
     const response = await fetch(path, {
       method: "POST",
@@ -8,6 +8,10 @@ async function requestProjectWorkspace(path, body, errorMessage) {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
+      if (terminalErrors.includes(result?.error)) {
+        return { success: false, error: result.error, terminal: true };
+      }
+
       throw new Error("Project workspace request failed");
     }
 
@@ -40,5 +44,20 @@ export function readProjectFile(path, startLine, endLine) {
     "/api/developer/read-file",
     body,
     "Could not read the project file."
+  );
+}
+
+export function openProjectFile(path, line) {
+  const body = { path };
+
+  if (line !== undefined) {
+    body.line = line;
+  }
+
+  return requestProjectWorkspace(
+    "/api/developer/open-file",
+    body,
+    "Could not open the project file in VS Code.",
+    ["invalid_path", "file_not_found", "file_not_allowed", "invalid_line"]
   );
 }

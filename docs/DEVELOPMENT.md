@@ -13,6 +13,9 @@ document do not exist yet.
 - Local Google OAuth client credentials for the Calendar integration.
 - The Codex CLI installed and available on your `PATH` if you want to use the
   voice-driven Codex tool.
+- The VS Code `code` CLI available on your `PATH` if you want to open validated
+  project files by voice. Offscreen invokes only this fixed CLI with one
+  configured-project text file; it never runs spoken commands.
 - A modern browser with microphone permission available.
 
 ## Installation

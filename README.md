@@ -214,7 +214,9 @@ AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 
 - No email-reading integration; Gmail can only be opened.
 - Browser MCP and general browser automation are planned, not implemented.
-- Deterministic developer workspace tools are planned, not implemented.
+- Deterministic developer workspace tools support Git status, bounded project
+  search/read, the configured test suite, and validated project-file opening in
+  VS Code; they do not provide arbitrary command execution.
 - No Calendar write access.
 - Codex is local and read-only.
 - Google Calendar requires local OAuth setup.

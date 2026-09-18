@@ -141,6 +141,13 @@ project search and read routes. It sends only the tool arguments to fixed
 endpoints and returns normalized failures; `app.js` retains session/turn checks
 and generic tool-result coordination.
 
+`project-vscode.js` owns the deterministic, LOCAL-only VS Code file-opening
+adapter. It reuses the workspace path and text-file policy, accepts only an
+existing project-relative file plus an optional bounded line number, and starts
+the fixed `code` CLI directly with `shell: false`. It never accepts an
+application, executable, command, working directory, environment, or project
+root from the browser.
+
 `git-status-tool.js` owns browser-side Git status HTTP execution. It sends no
 command, path, or arguments, and returns the server's structured status result.
 
@@ -237,6 +244,8 @@ Microphone
             → fixed read-only Git status adapter in the configured project root
        → search_project/read_project_file: browser calls local project workspace APIs
             → bounded Node filesystem search/read adapter in the configured project root
+       → open_project_file: browser calls the local project file-opening API
+            → validated fixed `code` CLI invocation for one configured-project file
        → browser_*: browser calls local browser API
             → bounded Playwright MCP adapter
   → browser queues tool.result

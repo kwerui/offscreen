@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readProjectFile, searchProject } from "../public/project-workspace-tool.js";
+import { openProjectFile, readProjectFile, searchProject } from "../public/project-workspace-tool.js";
 import { runProjectTests } from "../public/project-tests-tool.js";
 
 async function withMockFetch(mockFetch, runTest) {
@@ -43,6 +43,46 @@ test("sends only bounded search and read arguments to fixed developer routes", a
       },
     },
   ]);
+});
+
+test("sends only bounded file opening arguments to the fixed developer route", async () => {
+  await withMockFetch(async (url, options) => {
+    assert.equal(url, "/api/developer/open-file");
+    assert.deepEqual(options, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "server.js", line: 120 }),
+    });
+    return { ok: true, json: async () => ({ success: true, path: "server.js", line: 120 }) };
+  }, async () => {
+    assert.deepEqual(await openProjectFile("server.js", 120), {
+      success: true,
+      path: "server.js",
+      line: 120,
+    });
+  });
+});
+
+test("normalizes project file opening HTTP and network failures", async () => {
+  await withMockFetch(async () => ({ ok: false, json: async () => ({ error: "detail" }) }), async () => {
+    assert.deepEqual(await openProjectFile("server.js"), {
+      success: false,
+      error: "Could not open the project file in VS Code.",
+    });
+  });
+});
+
+test("preserves normalized terminal VS Code validation failures without retrying", async () => {
+  await withMockFetch(async () => ({
+    ok: false,
+    json: async () => ({ success: false, error: "file_not_allowed" }),
+  }), async () => {
+    assert.deepEqual(await openProjectFile(".env"), {
+      success: false,
+      error: "file_not_allowed",
+      terminal: true,
+    });
+  });
 });
 
 test("runs project tests through the fixed route with no command arguments", async () => {

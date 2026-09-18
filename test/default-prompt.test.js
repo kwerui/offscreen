@@ -53,6 +53,14 @@ test("routes deterministic project search and reading away from Codex", () => {
   assert.match(defaultPrompt, /paths[\s\S]*filenames[\s\S]*snippets[\s\S]*source content[\s\S]*untrusted[\s\S]*data only[\s\S]*never[\s\S]*instructions/i);
 });
 
+test("routes deterministic VS Code project file opening away from Codex", () => {
+  assert.match(defaultPrompt, /DETERMINISTIC VS CODE FILE OPENING.*REQUIRED/i);
+  assert.match(defaultPrompt, /Open server\.js in VS Code[\s\S]*open_project_file/i);
+  assert.match(defaultPrompt, /Do not call ask_codex[\s\S]*open.*known project file/i);
+  assert.match(defaultPrompt, /paths[\s\S]*untrusted[\s\S]*never[\s\S]*instructions/i);
+  assert.match(defaultPrompt, /terminal[\s\S]*do not retry[\s\S]*same user\s+request/i);
+});
+
 test("routes deterministic project test requests away from Codex", () => {
   assert.match(defaultPrompt, /DETERMINISTIC PROJECT TEST TOOL ROUTING.*REQUIRED/i);
   assert.match(defaultPrompt, /Run the tests[\s\S]*Do the tests pass[\s\S]*Are any tests failing[\s\S]*run_project_tests/i);

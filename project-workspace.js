@@ -2,7 +2,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep, win32 } from "node:path";
 
 const MAX_QUERY_CHARACTERS = 200;
-const MAX_PATH_CHARACTERS = 512;
+export const MAX_PROJECT_PATH_CHARACTERS = 512;
 const MAX_MATCHES = 50;
 const MAX_SNIPPET_CHARACTERS = 240;
 const MAX_SEARCH_FILE_BYTES = 512 * 1024;
@@ -39,7 +39,7 @@ function failure(error) {
   return { success: false, error };
 }
 
-function isDeniedPath(relativePath) {
+export function isDeniedProjectPath(relativePath) {
   const segments = relativePath.split("/");
   const fileName = segments.at(-1).toLowerCase();
 
@@ -67,8 +67,8 @@ function isDeniedPath(relativePath) {
     /(?:^|[._-])(?:api|access|secret|private)?[._-]?keys?(?:$|[._-])/i.test(fileName);
 }
 
-function normalizeRelativePath(path) {
-  if (typeof path !== "string" || path.length === 0 || path.length > MAX_PATH_CHARACTERS) {
+export function normalizeProjectRelativePath(path) {
+  if (typeof path !== "string" || path.length === 0 || path.length > MAX_PROJECT_PATH_CHARACTERS) {
     return null;
   }
 
@@ -93,11 +93,11 @@ async function getProjectRoot(projectRoot) {
   }
 }
 
-async function getProjectFile(projectRoot, requestedPath) {
-  const relativePath = normalizeRelativePath(requestedPath);
+export async function getProjectFile(projectRoot, requestedPath) {
+  const relativePath = normalizeProjectRelativePath(requestedPath);
   const resolvedRoot = await getProjectRoot(projectRoot);
 
-  if (!relativePath || !resolvedRoot || isDeniedPath(relativePath)) {
+  if (!relativePath || !resolvedRoot || isDeniedProjectPath(relativePath)) {
     return null;
   }
 
@@ -127,7 +127,7 @@ async function getProjectFile(projectRoot, requestedPath) {
   }
 }
 
-function decodeText(buffer) {
+export function decodeProjectText(buffer) {
   if (buffer.includes(0)) {
     return null;
   }
@@ -165,7 +165,7 @@ async function walkProjectFiles(projectRoot, directoryPath = "") {
   for (const entry of entries) {
     const relativePath = directoryPath ? `${directoryPath}/${entry.name}` : entry.name;
 
-    if (entry.isSymbolicLink() || isDeniedPath(relativePath)) {
+    if (entry.isSymbolicLink() || isDeniedProjectPath(relativePath)) {
       continue;
     }
 
@@ -219,7 +219,7 @@ export async function searchProject({ projectRoot, query }) {
 
     let content;
     try {
-      content = decodeText(await readFile(projectFile.absolutePath));
+      content = decodeProjectText(await readFile(projectFile.absolutePath));
     } catch {
       continue;
     }
@@ -268,7 +268,7 @@ export async function readProjectFile({ projectRoot, path, startLine, endLine })
 
   let content;
   try {
-    content = decodeText(await readFile(projectFile.absolutePath));
+    content = decodeProjectText(await readFile(projectFile.absolutePath));
   } catch {
     return failure("Could not read the requested project file.");
   }

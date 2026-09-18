@@ -171,3 +171,17 @@ test("defines bounded local project search and read voice tools", () => {
   assert.match(searchTool.description, /paths.*filenames.*snippets.*untrusted.*data.*never.*instructions/i);
   assert.match(readTool.description, /source content.*untrusted.*data.*never.*instructions/i);
 });
+
+test("defines a bounded LOCAL-only project file opening voice tool", () => {
+  const openTool = VOICE_TOOLS.find((tool) => tool.name === "open_project_file");
+
+  assert.ok(openTool);
+  assert.deepEqual(openTool.parameters.required, ["path"]);
+  assert.equal(openTool.parameters.properties.path.type, "string");
+  assert.equal(openTool.parameters.properties.line.type, "integer");
+  assert.equal(openTool.execution_mode, "hold");
+  assert.match(openTool.description, /VS Code/i);
+  assert.match(openTool.description, /project-relative/i);
+  assert.match(openTool.description, /cannot.*arbitrary filesystem/i);
+  assert.match(openTool.description, /does not edit/i);
+});

@@ -16,6 +16,7 @@ const LOCAL_ONLY_TOOL_NAMES = [
   "get_calendar_events",
   "search_project",
   "read_project_file",
+  "open_project_file",
   "get_git_status",
   "run_project_tests",
   "ask_codex",
