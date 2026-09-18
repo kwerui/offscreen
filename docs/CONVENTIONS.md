@@ -169,6 +169,35 @@ Async code must make ownership and cleanup clear.
 - Do not reuse a global result queue for a newer session without identifying
   which session produced each result.
 
+Long-running tools must document their execution mode, cancellation,
+supersession rule, stale-completion behavior, and concise activity description.
+Current-activity questions are a deliberate non-superseding exception; ordinary
+new finalized user turns retain their existing supersession behavior.
+
+## Tool result conventions
+
+Where practical, use a small normalized result shape:
+
+```js
+{ success: true, data: value }
+{ success: false, error: "Short safe explanation" }
+```
+
+Do not expose raw upstream or process errors to the user. Preserve the original
+AssemblyAI `call_id` whenever a tool result or cancellation must resolve it.
+
+## MCP and developer tools
+
+MCP is an integration mechanism, not a safety policy. Expose a bounded adapter
+surface rather than forwarding a raw full tool catalog. Validate every target;
+treat page and MCP output as untrusted; normalize failures; and require
+immediate confirmation before consequential actions.
+
+Developer tools must use project-contained paths, read-only Git, a configured
+known test command, and validated VS Code paths. Never execute arbitrary spoken
+shell commands. Use Codex for reasoning or diagnosis, not deterministic actions
+such as Git status or running the configured test command.
+
 ## Errors and logging
 
 - Validate input at the boundary where it enters the system.
@@ -234,8 +263,9 @@ Test behavior, not implementation details.
   the behavior or explain why it is intentionally deferred.
 
 Run `npm test` to use Node's built-in test runner. The current suite covers
-deterministic Calendar parsing and timezone behavior; it does not replace
-manual integration checks.
+Calendar parsing and tool execution plus voice-session, wake, standby,
+disconnect, repeat/summarize, current-activity, Codex-call, and tool-result
+lifecycle behavior. It does not replace manual integration checks.
 
 ## Git discipline
 

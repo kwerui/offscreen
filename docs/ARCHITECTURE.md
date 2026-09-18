@@ -14,6 +14,13 @@ This document distinguishes **current architecture** (code that exists today)
 from **proposed architecture** (a future cleanup plan). Do not assume a
 proposed file or module already exists.
 
+## Governing principle
+
+**AssemblyAI interprets voice. Offscreen owns state and safety. Tools perform
+actions.** AssemblyAI may select a capability from the bounded surface, but
+Offscreen remains responsible for lifecycle ownership, input validation,
+confirmation, and normalized results.
+
 ## Current repository structure
 
 ```text
@@ -208,6 +215,17 @@ Every connection and tool call carries the current `sessionId` and
 finalized user turn explicitly resolves any superseded interactive Codex call
 with its original `call_id` before the old completion can be ignored.
 
+### Lifecycle invariants
+
+- A stale session cannot mutate the active session.
+- A stale tool turn cannot mutate a newer turn.
+- A current-activity question is the intentional non-superseding exception;
+  its client-owned context cannot cancel the work it reports.
+- Codex cancellation resolves the original `call_id`; late completions are
+  ignored.
+- Standby and wake remain client-owned browser behavior.
+- UI activity status is feedback, not authoritative lifecycle state.
+
 ### Google Calendar flow
 
 The `get_calendar_events` browser tool sends the requested natural-language
@@ -245,6 +263,37 @@ Google Calendar access, Codex process execution, server-side validation, and
 HTTP APIs. Never move private API keys or Google OAuth credentials into browser
 code.
 
+## Target tool layer
+
+This is a target boundary, not a claim that new modules already exist.
+
+| Tool category | Purpose | Example |
+| --- | --- | --- |
+| Deterministic local/backend tools | Validated, predictable operations | “What files changed?” → Git; “run tests” → configured test runner. |
+| MCP adapters | Bounded browser/service capabilities | “Click that result” → browser MCP adapter. |
+| Reasoning tools | Analysis where deterministic output is not enough | “Why did this fail?” → Codex. |
+
+### MCP boundary
+
+MCP is an integration mechanism, not Offscreen's safety policy. Future adapters
+must expose a bounded capability set rather than a raw catalog, validate inputs,
+treat page and MCP output as untrusted, normalize failures, and require
+confirmation for consequential actions. MCP does not own the AssemblyAI session
+or tool-turn lifecycle.
+
+### Developer workspace boundary
+
+Future developer tools are limited to read-only Git, project-contained paths,
+a configured test command, and validated VS Code paths. No arbitrary voice
+shell execution. Use Codex for reasoning and diagnosis, not predictable work
+such as Git status or a known test command.
+
+### Deployment boundary
+
+The current loopback server, desktop Calendar OAuth, and local Codex CLI cannot
+simply be exposed as a public hosted service. Any deployment must explicitly
+separate hosted-safe capabilities from local-only ones.
+
 ## Current external integrations
 
 | Integration | Current use | Boundary |
@@ -281,8 +330,10 @@ These are audit findings, not evidence that every path currently fails.
   integration verification.
 - Multiple Calendar endpoints exist, but only the query endpoint has a
   current in-repository browser caller.
-- The initial automated suite covers only deterministic Calendar-query logic;
-  integration behavior still needs manual verification.
+- The Node test suite covers Calendar parsing and tool execution plus session,
+  wake, standby, disconnect, repeat/summarize, current-activity, Codex-call,
+  and tool-result lifecycle behavior. Real integrations still need manual
+  verification.
 - `offscreen.zip` is stale and must not be trusted as a release artifact.
 
 ## Proposed target architecture

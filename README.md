@@ -1,8 +1,9 @@
 # Offscreen
 
-Offscreen is a voice-first computer companion designed to help users complete
-routine computer tasks with less screen and keyboard interaction. It was built
-for the AssemblyAI Voice Agent Hackathon.
+Offscreen is an eyes-free voice companion for real computer work, built for the
+AssemblyAI Voice Agent Hackathon. Most voice assistants answer questions;
+Offscreen is designed to get bounded work done with minimal screen and keyboard
+attention.
 
 Rather than providing arbitrary computer control, Offscreen combines voice
 conversation with a small set of deliberate, bounded actions: opening a
@@ -53,6 +54,13 @@ Codex CLI to inspect the current project.
 
 Opening Gmail only opens the Gmail website. Offscreen does not read email.
 
+## Product direction
+
+Offscreen is building toward safe, stateful voice control: bounded browser
+automation through MCP, deterministic developer-workspace tools, and contextual
+follow-ups. Browser MCP and developer tools are planned, not implemented.
+See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md) and [ROADMAP.md](ROADMAP.md).
+
 ## How it works
 
 1. The browser requests a short-lived AssemblyAI token from the local Express
@@ -65,12 +73,12 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
    local Codex CLI with a read-only sandbox. Each result is returned through
    the voice session so the agent can respond.
 
-## Planned direction
+## Architecture
 
-The current demo is intentionally bounded. Planned work, including voice
-controls, developer workspace actions, personal productivity integrations, and
-search tools, is listed in [ROADMAP.md](ROADMAP.md). None of those planned
-features are implemented unless they appear under **Current features** above.
+AssemblyAI interprets voice; Offscreen owns session state and safety; tools
+perform bounded actions. The browser owns audio, UI, wake listening, and the
+voice WebSocket. The local server owns secrets, Calendar OAuth, token minting,
+and local Codex execution. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 `public/index.html` contains the page markup, `public/styles.css` contains the
 page styles, and `public/ui.js` contains DOM lookup and UI rendering.
@@ -195,10 +203,12 @@ AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 ## Current limitations
 
 - No email-reading integration; Gmail can only be opened.
-- No arbitrary website opening or general browser automation.
+- Browser MCP and general browser automation are planned, not implemented.
+- Deterministic developer workspace tools are planned, not implemented.
 - No Calendar write access.
 - Codex is local and read-only.
 - Google Calendar requires local OAuth setup.
+- Public hosting is not implemented; the server is intentionally loopback-only.
 - Browser popup settings can prevent a supported website from opening in a new
   tab.
 - Voice wake depends on browser speech-recognition support and may require an

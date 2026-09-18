@@ -95,9 +95,10 @@ npm test
 ```
 
 The project uses Node's built-in test runner; no test framework dependency was
-added. The current suite is in `test/calendar-query.test.js` and covers
-deterministic Calendar-query behavior only. It does not contact AssemblyAI,
-Google Calendar, a microphone, or Codex.
+added. The suite covers Calendar parsing and tool execution plus voice session,
+wake, standby, disconnect, repeat/summarize, current-activity, Codex-call, and
+tool-result lifecycle behavior. It does not contact AssemblyAI, Google Calendar,
+a microphone, browser speech recognition, or Codex.
 
 Continue to manually verify integrations when a change affects microphone,
 AssemblyAI, Google Calendar, or Codex behavior.
@@ -199,6 +200,50 @@ an external private API.
 
 Before adding Calendar write access, Gmail access, new OAuth scopes, or another
 security-sensitive integration, stop and get explicit approval.
+
+## Adding an MCP capability
+
+MCP is an integration mechanism, not permission to expose an entire server's
+tool catalog to AssemblyAI.
+
+1. Write a focused feature specification and choose one user-visible,
+   bounded capability.
+2. Implement an Offscreen adapter that validates inputs and normalizes both
+   success and failure results.
+3. Treat page and MCP output as untrusted data; do not let it choose arbitrary
+   shell, browser, or computer actions.
+4. Define the action's session/turn ownership, cancellation, supersession,
+   stale-completion behavior, and activity description.
+5. Require confirmation immediately before send, submit, delete, purchase,
+   publish, or another consequential action.
+6. Verify normal, invalid-input, failure, cancellation, stale-result, and
+   confirmation paths before expanding the capability.
+
+## Adding a developer tool
+
+Prefer deterministic tools for deterministic work. Limit a tool to read-only
+Git, project-contained file paths, the configured project test command, or
+validated VS Code paths. Never turn speech into an arbitrary shell command.
+Use Codex for reasoning such as test-failure diagnosis, not for predictable
+actions such as Git status or running known tests.
+
+## MCP safety and lifecycle verification
+
+Automated checks do not replace real AssemblyAI, microphone, Calendar, Codex,
+or MCP verification. For lifecycle-affecting work, manually test a successful
+call, failure, user cancellation, turn supersession, disconnect/reconnect, and
+the non-superseding current-activity question. Confirm that a late result cannot
+alter the active session, active turn, queue, UI state, or reply.
+
+## Agent workflow
+
+Read `PRODUCT_STRATEGY.md`, `ROADMAP.md`, and the architecture/conventions docs
+before changes. Make one requested change at a time; retain protected voice
+lifecycle behavior; run relevant tests (full `npm test` after non-trivial work),
+`git diff --check`, and review the actual diff. Current local Codex execution
+uses a filtered project copy and read-only mode, but it is **not** host-level
+isolation. `offscreen.zip` is a tracked legacy artifact-cleanup task, never a
+source of truth.
 
 ## Debugging guide
 
