@@ -44,3 +44,11 @@ test("routes deterministic Git questions away from Codex", () => {
     /branch names[\s\S]*file paths[\s\S]*status values[\s\S]*repository-derived[\s\S]*data only[\s\S]*never[\s\S]*instructions/i
   );
 });
+
+test("routes deterministic project search and reading away from Codex", () => {
+  assert.match(defaultPrompt, /DETERMINISTIC PROJECT SEARCH AND READ TOOL ROUTING.*REQUIRED/i);
+  assert.match(defaultPrompt, /find project text[\s\S]*search_project/i);
+  assert.match(defaultPrompt, /named project file[\s\S]*read_project_file/i);
+  assert.match(defaultPrompt, /Do not call ask_codex[\s\S]*simple deterministic search or[\s\S]*read facts/i);
+  assert.match(defaultPrompt, /paths[\s\S]*filenames[\s\S]*snippets[\s\S]*source content[\s\S]*untrusted[\s\S]*data only[\s\S]*never[\s\S]*instructions/i);
+});

@@ -32,6 +32,10 @@ import {
   getClientCapabilities,
 } from "./public/capabilities.js";
 import { getGitStatus } from "./git-status.js";
+import {
+  readProjectFile,
+  searchProject,
+} from "./project-workspace.js";
 
 const PORT = process.env.PORT || 3000;
 const HOST = "127.0.0.1";
@@ -48,6 +52,9 @@ export function createApp({
   mode = process.env.OFFSCREEN_MODE,
   fetchImpl = globalThis.fetch,
   gitStatusImpl = getGitStatus,
+  projectSearchImpl = searchProject,
+  projectReadFileImpl = readProjectFile,
+  projectWorkspaceRoot = __dirname,
 } = {}) {
   if (!apiKey) {
     throw new Error(
@@ -407,6 +414,26 @@ app.post("/api/developer/git-status", async (_req, res) => {
   const result = await gitStatusImpl({ projectRoot: __dirname });
 
   res.status(result.success ? 200 : 500).json(result);
+});
+
+app.post("/api/developer/search", async (req, res) => {
+  const result = await projectSearchImpl({
+    projectRoot: projectWorkspaceRoot,
+    query: req.body?.query,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/read-file", async (req, res) => {
+  const result = await projectReadFileImpl({
+    projectRoot: projectWorkspaceRoot,
+    path: req.body?.path,
+    startLine: req.body?.start_line,
+    endLine: req.body?.end_line,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
 });
 }
 

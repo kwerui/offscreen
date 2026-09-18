@@ -29,6 +29,10 @@ import { getVoiceTools } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { getGitStatus } from "./git-status-tool.js";
+import {
+  readProjectFile,
+  searchProject,
+} from "./project-workspace-tool.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import { createCodexCallTracker } from "./codex-call-tracker.js";
@@ -1175,6 +1179,58 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // ---------------------------------
   // DEVELOPER WORKSPACE
   // ---------------------------------
+
+  if (event.name === "search_project") {
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Searching the project."
+    );
+
+    try {
+      const result = await searchProject(event.arguments?.query);
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
+
+  if (event.name === "read_project_file") {
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Reading a project file."
+    );
+
+    try {
+      const result = await readProjectFile(
+        event.arguments?.path,
+        event.arguments?.start_line,
+        event.arguments?.end_line
+      );
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
 
   if (event.name === "get_git_status") {
     startActivity(

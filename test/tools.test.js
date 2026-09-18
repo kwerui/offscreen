@@ -141,3 +141,16 @@ test("defines the bounded no-argument Git status voice tool", () => {
     /branch names.*file paths.*status values.*untrusted.*repository.*data.*never.*instructions/i
   );
 });
+
+test("defines bounded local project search and read voice tools", () => {
+  const searchTool = VOICE_TOOLS.find((tool) => tool.name === "search_project");
+  const readTool = VOICE_TOOLS.find((tool) => tool.name === "read_project_file");
+
+  assert.deepEqual(searchTool.parameters.required, ["query"]);
+  assert.deepEqual(readTool.parameters.required, ["path"]);
+  assert.equal(searchTool.execution_mode, "hold");
+  assert.equal(readTool.execution_mode, "hold");
+  assert.match(searchTool.description, /literal/i);
+  assert.match(searchTool.description, /paths.*filenames.*snippets.*untrusted.*data.*never.*instructions/i);
+  assert.match(readTool.description, /source content.*untrusted.*data.*never.*instructions/i);
+});

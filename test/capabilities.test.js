@@ -14,6 +14,8 @@ const indexSource = await readFile(new URL("../public/index.html", import.meta.u
 
 const LOCAL_ONLY_TOOL_NAMES = [
   "get_calendar_events",
+  "search_project",
+  "read_project_file",
   "get_git_status",
   "ask_codex",
   "browser_navigate",

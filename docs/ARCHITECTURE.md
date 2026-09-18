@@ -45,6 +45,7 @@ public/
   calendar-tool.js        Calendar HTTP execution
   codex-tool.js           Codex HTTP execution
   git-status-tool.js      Git status HTTP execution
+  project-workspace-tool.js  Project search/read HTTP execution
   browser-tool.js         Browser MCP HTTP execution
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
@@ -125,6 +126,20 @@ tracking, supersession/cancellation, sessions, tool turns, or result queues.
 the fixed `git status --porcelain=v1 --branch -z` command in the configured
 project root, parses its machine-readable output into branch and safe file
 status entries, and normalizes failures without returning process output.
+
+`project-workspace.js` owns deterministic local project search and source-file
+reading. It walks only the configured project root with Node filesystem APIs,
+uses literal text matching, rejects paths that are not repository-relative, and
+does not follow symlinks. One shared exclusion policy hides Git metadata,
+dependencies, environment files, credentials, private keys, archives, and
+other obvious secret files from both operations. It bounds query/path lengths,
+matches, snippets, file sizes, and read ranges; paths and all repository text
+are untrusted data rather than instructions.
+
+`project-workspace-tool.js` owns browser-side HTTP execution for the local
+project search and read routes. It sends only the tool arguments to fixed
+endpoints and returns normalized failures; `app.js` retains session/turn checks
+and generic tool-result coordination.
 
 `git-status-tool.js` owns browser-side Git status HTTP execution. It sends no
 command, path, or arguments, and returns the server's structured status result.
@@ -220,6 +235,8 @@ Microphone
             → read-only local Codex CLI
        → get_git_status: browser calls local Git status API
             → fixed read-only Git status adapter in the configured project root
+       → search_project/read_project_file: browser calls local project workspace APIs
+            → bounded Node filesystem search/read adapter in the configured project root
        → browser_*: browser calls local browser API
             → bounded Playwright MCP adapter
   → browser queues tool.result

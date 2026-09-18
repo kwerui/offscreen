@@ -34,6 +34,8 @@ test("LOCAL registers every current backend capability route", () => {
     { path: "/api/capabilities.js", methods: ["get"] },
     { path: "/api/codex", methods: ["post"] },
     { path: "/api/developer/git-status", methods: ["post"] },
+    { path: "/api/developer/read-file", methods: ["post"] },
+    { path: "/api/developer/search", methods: ["post"] },
     { path: "/api/voice-token", methods: ["get"] },
   ]);
 });
@@ -112,4 +114,38 @@ test("Git status route uses only the configured project root and ignores request
   assert.equal(response.statusCode, 200);
   assert.equal(calls.length, 1);
   assert.match(calls[0].projectRoot, /offscreen$/);
+});
+
+test("project workspace routes use only the configured project root and bounded request fields", async () => {
+  const calls = [];
+  const app = createApp({
+    apiKey: "test-key",
+    mode: "LOCAL",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ token: "test-token" }) }),
+    projectWorkspaceRoot: "/configured/project",
+    projectSearchImpl: async (options) => {
+      calls.push({ name: "search", options });
+      return { success: true, query: options.query, matches: [], truncated: false };
+    },
+    projectReadFileImpl: async (options) => {
+      calls.push({ name: "read", options });
+      return { success: true, path: options.path, content: "", truncated: false };
+    },
+  });
+  const findRoute = (path) => app._router.stack.find((layer) => layer.route?.path === path);
+  const response = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+
+  await findRoute("/api/developer/search").route.stack[0].handle(
+    { body: { query: "needle", projectRoot: "/outside", cwd: "/outside" } },
+    response
+  );
+  await findRoute("/api/developer/read-file").route.stack[0].handle(
+    { body: { path: "file.js", start_line: 2, end_line: 4, projectRoot: "/outside", cwd: "/outside" } },
+    response
+  );
+
+  assert.deepEqual(calls, [
+    { name: "search", options: { projectRoot: "/configured/project", query: "needle" } },
+    { name: "read", options: { projectRoot: "/configured/project", path: "file.js", startLine: 2, endLine: 4 } },
+  ]);
 });
