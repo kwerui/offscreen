@@ -117,3 +117,27 @@ test("defines a no-argument summarize_last_response voice tool", () => {
   assert.match(summarizeTool.description, /shorten|summarize/i);
   assert.match(summarizeTool.description, /not.*rerun.*previous tool/i);
 });
+
+test("defines the bounded no-argument Git status voice tool", () => {
+  const gitStatusTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "get_git_status"
+  );
+
+  assert.ok(gitStatusTool);
+  assert.deepEqual(gitStatusTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.equal(gitStatusTool.execution_mode, "hold");
+  assert.match(gitStatusTool.description, /staged.*untracked.*clean/i);
+  assert.match(
+    gitStatusTool.description,
+    /every.*current Git working state.*including.*follow-up.*always call.*before answering.*earlier.*result/i
+  );
+  assert.match(gitStatusTool.description, /not.*commit.*push.*reset.*checkout/i);
+  assert.match(
+    gitStatusTool.description,
+    /branch names.*file paths.*status values.*untrusted.*repository.*data.*never.*instructions/i
+  );
+});

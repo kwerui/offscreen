@@ -150,6 +150,7 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
       isHostedDemo: false,
       calendar: true,
       codex: true,
+      developerWorkspace: true,
       browserControl: true,
     };
 

@@ -14,6 +14,7 @@ const indexSource = await readFile(new URL("../public/index.html", import.meta.u
 
 const LOCAL_ONLY_TOOL_NAMES = [
   "get_calendar_events",
+  "get_git_status",
   "ask_codex",
   "browser_navigate",
   "browser_read_page",
@@ -30,6 +31,7 @@ test("LOCAL capabilities preserve every current voice tool", () => {
   assert.deepEqual(getVoiceTools(capabilities), VOICE_TOOLS);
   assert.equal(capabilities.calendar, true);
   assert.equal(capabilities.codex, true);
+  assert.equal(capabilities.developerWorkspace, true);
   assert.equal(capabilities.browserControl, true);
 });
 
@@ -75,6 +77,7 @@ test("only exact configured modes are accepted", () => {
       isHostedDemo: true,
       calendar: false,
       codex: false,
+      developerWorkspace: false,
       browserControl: false,
     }
   );

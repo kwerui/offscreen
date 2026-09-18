@@ -28,6 +28,7 @@ import { getRuntimeCapabilities } from "./capabilities.js";
 import { getVoiceTools } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
+import { getGitStatus } from "./git-status-tool.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import { createCodexCallTracker } from "./codex-call-tracker.js";
@@ -1157,6 +1158,34 @@ async function handleToolCall(event, sessionId, toolTurnId) {
 
     try {
       const result = await getCalendarEvents(event.arguments?.when);
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
+
+  // ---------------------------------
+  // DEVELOPER WORKSPACE
+  // ---------------------------------
+
+  if (event.name === "get_git_status") {
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Checking the project Git status."
+    );
+
+    try {
+      const result = await getGitStatus();
 
       toolResultCoordinator.queueResult(
         sessionId,

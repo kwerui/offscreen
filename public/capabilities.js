@@ -7,6 +7,7 @@ const LOCAL_CAPABILITIES = Object.freeze({
   isHostedDemo: false,
   calendar: true,
   codex: true,
+  developerWorkspace: true,
   browserControl: true,
 });
 
@@ -14,6 +15,7 @@ const HOSTED_DEMO_CAPABILITIES = Object.freeze({
   isHostedDemo: true,
   calendar: false,
   codex: false,
+  developerWorkspace: false,
   browserControl: false,
 });
 
@@ -42,6 +44,7 @@ export function getClientCapabilities(mode) {
     isHostedDemo: capabilities.isHostedDemo,
     calendar: capabilities.calendar,
     codex: capabilities.codex,
+    developerWorkspace: capabilities.developerWorkspace,
     browserControl: capabilities.browserControl,
   };
 }
@@ -51,6 +54,7 @@ export function getRuntimeCapabilities(runtimeCapabilities) {
     runtimeCapabilities?.isHostedDemo === false &&
     runtimeCapabilities.calendar === true &&
     runtimeCapabilities.codex === true &&
+    runtimeCapabilities.developerWorkspace === true &&
     runtimeCapabilities.browserControl === true
   ) {
     return LOCAL_CAPABILITIES;
@@ -60,6 +64,7 @@ export function getRuntimeCapabilities(runtimeCapabilities) {
     runtimeCapabilities?.isHostedDemo === true &&
     runtimeCapabilities.calendar === false &&
     runtimeCapabilities.codex === false &&
+    runtimeCapabilities.developerWorkspace === false &&
     runtimeCapabilities.browserControl === false
   ) {
     return HOSTED_DEMO_CAPABILITIES;

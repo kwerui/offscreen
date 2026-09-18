@@ -31,6 +31,7 @@ import {
   getCapabilities,
   getClientCapabilities,
 } from "./public/capabilities.js";
+import { getGitStatus } from "./git-status.js";
 
 const PORT = process.env.PORT || 3000;
 const HOST = "127.0.0.1";
@@ -46,6 +47,7 @@ export function createApp({
   apiKey = process.env.ASSEMBLYAI_API_KEY,
   mode = process.env.OFFSCREEN_MODE,
   fetchImpl = globalThis.fetch,
+  gitStatusImpl = getGitStatus,
 } = {}) {
   if (!apiKey) {
     throw new Error(
@@ -397,6 +399,14 @@ app.post("/api/codex", async (req, res) => {
       output: stdout.trim(),
     });
   });
+});
+}
+
+if (capabilities.developerWorkspace) {
+app.post("/api/developer/git-status", async (_req, res) => {
+  const result = await gitStatusImpl({ projectRoot: __dirname });
+
+  res.status(result.success ? 200 : 500).json(result);
 });
 }
 

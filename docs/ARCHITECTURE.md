@@ -44,6 +44,7 @@ public/
   website-tool.js         Supported website execution
   calendar-tool.js        Calendar HTTP execution
   codex-tool.js           Codex HTTP execution
+  git-status-tool.js      Git status HTTP execution
   browser-tool.js         Browser MCP HTTP execution
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
@@ -119,6 +120,14 @@ data. It does not coordinate AssemblyAI sessions, tool turns, or results.
 calls the local Codex endpoint, and returns its existing success or failure
 tool-result data. It does not know about AssemblyAI events, interactive-call
 tracking, supersession/cancellation, sessions, tool turns, or result queues.
+
+`git-status.js` owns deterministic local Git status inspection. It invokes only
+the fixed `git status --porcelain=v1 --branch -z` command in the configured
+project root, parses its machine-readable output into branch and safe file
+status entries, and normalizes failures without returning process output.
+
+`git-status-tool.js` owns browser-side Git status HTTP execution. It sends no
+command, path, or arguments, and returns the server's structured status result.
 
 `browser-tool.js` owns browser-side HTTP execution for the bounded browser
 actions and confirmation control requests. It calls the local browser endpoint
@@ -209,6 +218,8 @@ Microphone
             → Google Calendar API
        → ask_codex: browser calls local Codex API
             → read-only local Codex CLI
+       → get_git_status: browser calls local Git status API
+            → fixed read-only Git status adapter in the configured project root
        → browser_*: browser calls local browser API
             → bounded Playwright MCP adapter
   → browser queues tool.result
@@ -236,7 +247,11 @@ AssemblyAI sends a `tool.call` event. The browser dispatches it by tool name,
 performs the requested browser or backend action, adds a result to a pending
 queue, and later sends `tool.result` messages when the reply/tool timing
 allows. Calendar uses `execution_mode: "hold"`; `ask_codex` uses
-`execution_mode: "interactive"`.
+`execution_mode: "interactive"`. `get_git_status` uses `execution_mode:
+"hold"` because it is fast and read-only. It is not cancellable at the process
+level; the existing session and tool-turn guards ignore a late completion from
+a superseded or disconnected session before it can queue a result or update
+activity state.
 
 Every connection and tool call carries the current `sessionId` and
 `toolTurnId`. This prevents an old request from changing a newer turn. A new

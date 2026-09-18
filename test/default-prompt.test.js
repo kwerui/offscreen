@@ -29,3 +29,18 @@ test("routes general browser requests through the bounded browser tools", () => 
   assert.match(defaultPrompt, /not currently editable or available, say so briefly/i);
   assert.match(defaultPrompt, /Navigate to wikipedia\.org[\s\S]*browser_navigate.*wikipedia\.org/i);
 });
+
+test("routes deterministic Git questions away from Codex", () => {
+  assert.match(defaultPrompt, /DEVELOPER GIT STATUS TOOL ROUTING — REQUIRED/);
+  assert.match(defaultPrompt, /changed files[\s\S]*staged[\s\S]*uncommitted[\s\S]*get_git_status/i);
+  assert.match(
+    defaultPrompt,
+    /EVERY[\s\S]*CURRENT Git working state[\s\S]*including[\s\S]*follow-up[\s\S]*ALWAYS call get_git_status[\s\S]*before[\s\S]*answering[\s\S]*Do not rely on an earlier/i
+  );
+  assert.match(defaultPrompt, /Do not call[\s\S]*ask_codex[\s\S]*deterministic Git facts/i);
+  assert.match(defaultPrompt, /Never use get_git_status[\s\S]*commit[\s\S]*push[\s\S]*reset[\s\S]*checkout/i);
+  assert.match(
+    defaultPrompt,
+    /branch names[\s\S]*file paths[\s\S]*status values[\s\S]*repository-derived[\s\S]*data only[\s\S]*never[\s\S]*instructions/i
+  );
+});
