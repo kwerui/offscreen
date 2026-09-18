@@ -133,6 +133,16 @@ Set your AssemblyAI key in `.env`:
 ASSEMBLYAI_API_KEY=your_key_here
 ```
 
+### Capability mode
+
+Offscreen defaults to `LOCAL` mode, which keeps the complete local developer
+feature set. Set `OFFSCREEN_MODE=HOSTED_DEMO` only for the hosted-safe demo
+surface: it keeps voice interaction and allowlisted website opening, while
+removing Calendar, local Codex inspection, and controlled-browser tools and
+their API routes. Any other non-empty value prevents startup rather than
+silently enabling local capabilities. This is capability separation only;
+token access protection is a later deployment increment.
+
 Save your Google OAuth desktop-client credential file as
 `credentials.json` in the repository root. Keep local OAuth token state,
 including `token.json` if your OAuth tooling creates it, out of version

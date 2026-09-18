@@ -27,12 +27,10 @@ import {
   runBrowserAction,
   validateBrowserRequest,
 } from "./browser-mcp.js";
-
-const API_KEY = process.env.ASSEMBLYAI_API_KEY;
-if (!API_KEY) {
-  console.error("Missing ASSEMBLYAI_API_KEY in environment. Copy .env.example to .env and add your key.");
-  process.exit(1);
-}
+import {
+  getCapabilities,
+  getClientCapabilities,
+} from "./public/capabilities.js";
 
 const PORT = process.env.PORT || 3000;
 const HOST = "127.0.0.1";
@@ -43,9 +41,29 @@ const MAX_CODEX_STDOUT_BYTES = 16 * 1024;
 const MAX_CODEX_STDERR_BYTES = 64 * 1024;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const app = express();
+
+export function createApp({
+  apiKey = process.env.ASSEMBLYAI_API_KEY,
+  mode = process.env.OFFSCREEN_MODE,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  if (!apiKey) {
+    throw new Error(
+      "Missing ASSEMBLYAI_API_KEY in environment. Copy .env.example to .env and add your key."
+    );
+  }
+
+  const capabilities = getCapabilities(mode);
+  const clientCapabilities = getClientCapabilities(mode);
+  const app = express();
 
 app.use(express.json());
+
+app.get("/api/capabilities.js", (_req, res) => {
+  res.set("Cache-Control", "no-store").type("application/javascript").send(
+    `globalThis.__OFFSCREEN_CAPABILITIES__ = ${JSON.stringify(clientCapabilities)};`
+  );
+});
 
 app.use(express.static(join(__dirname, "public")));
 
@@ -54,8 +72,8 @@ app.get("/api/voice-token", async (_req, res) => {
     const url = new URL("https://agents.assemblyai.com/v1/token");
     url.searchParams.set("expires_in_seconds", String(TOKEN_TTL_SECONDS));
 
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
+    const response = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
 
     if (!response.ok) {
@@ -72,6 +90,7 @@ app.get("/api/voice-token", async (_req, res) => {
   }
 });
 
+if (capabilities.calendar) {
 app.get("/api/calendar/events", async (req, res) => {
   try {
     const range = req.query.range || "upcoming";
@@ -173,7 +192,9 @@ app.get("/api/calendar/date", async (req, res) => {
     });
   }
 });
+}
 
+if (capabilities.browserControl) {
 app.post("/api/browser", async (req, res) => {
   const action = req.body?.action;
   const validation = validateBrowserRequest(action, req.body);
@@ -186,7 +207,9 @@ app.post("/api/browser", async (req, res) => {
 
   res.status(getBrowserResultStatus(result)).json(result);
 });
+}
 
+if (capabilities.codex) {
 app.post("/api/codex", async (req, res) => {
   const task = String(req.body?.task || "").trim();
 
@@ -375,7 +398,19 @@ app.post("/api/codex", async (req, res) => {
     });
   });
 });
+}
 
-app.listen(PORT, HOST, () => {
-  console.log(`Voice assistant app running at http://${HOST}:${PORT}`);
-});
+  return app;
+}
+
+export function startServer() {
+  const app = createApp();
+
+  return app.listen(PORT, HOST, () => {
+    console.log(`Voice assistant app running at http://${HOST}:${PORT}`);
+  });
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  startServer();
+}

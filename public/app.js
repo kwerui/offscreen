@@ -7,10 +7,12 @@ import {
   resetUserPartialTranscript,
   setConnectButtonDisabled,
   setDisconnectButtonDisabled,
+  setHostedDemoPrompt,
   setResumeListeningButtonDisabled,
   setStatus,
   setVoiceWakeButtonState,
   setVoiceWakeUnavailable,
+  setHostedDemoNoticeVisible,
   showToolStatus,
   updateUserPartialTranscript,
 } from "./ui.js";
@@ -22,7 +24,8 @@ import {
   startMicrophoneCapture,
   tearDownAudio,
 } from "./audio.js";
-import { VOICE_TOOLS } from "./tools.js";
+import { getRuntimeCapabilities } from "./capabilities.js";
+import { getVoiceTools } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { runCodexTask } from "./codex-tool.js";
@@ -31,6 +34,11 @@ import { createCodexCallTracker } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
 import { createWakeListener } from "./wake-listener.js";
+
+const capabilities = getRuntimeCapabilities(
+  globalThis.__OFFSCREEN_CAPABILITIES__
+);
+const voiceTools = getVoiceTools(capabilities);
 
 let activeSessionId = 0;
 
@@ -110,6 +118,11 @@ const FIXED_OFFSCREEN_INSTRUCTIONS =
   "doing, working on, or running, answer only from the Current Offscreen activity " +
   "context in the system prompt. Do not call a tool, advertise capabilities, or " +
   "reinterpret that question as a new task. If nothing is running, say so briefly.";
+
+const HOSTED_DEMO_PROMPT =
+  "You are Offscreen, an eyes-free voice companion. Have a natural conversation " +
+  "and use open_website only when the user asks to open one supported website. " +
+  "Do not advertise or imply capabilities that are not available in this hosted demo.";
 
 const STANDBY_INSTRUCTIONS =
   "You are in standby. Do not answer questions, start tools, or perform normal " +
@@ -264,7 +277,7 @@ function updateSystemPrompt() {
     type: "session.update",
     session: {
       system_prompt: getSystemPrompt(),
-      tools: standbyMode ? [] : VOICE_TOOLS,
+      tools: standbyMode ? [] : voiceTools,
     },
   });
 }
@@ -430,6 +443,8 @@ function updateVoiceWakeButton(disabled = false) {
 }
 
 updateVoiceWakeButton();
+setHostedDemoNoticeVisible(capabilities.isHostedDemo);
+setHostedDemoPrompt(capabilities.isHostedDemo ? HOSTED_DEMO_PROMPT : null);
 
 const codexCallTracker = createCodexCallTracker({
   sendCancellationResult: (sessionId, toolTurnId, callId, result) => {
@@ -589,10 +604,16 @@ async function connect() {
         ].join("-");
 
         const voiceAgentSettings = getVoiceAgentSettings();
+        const basePrompt = capabilities.isHostedDemo
+          ? HOSTED_DEMO_PROMPT
+          : voiceAgentSettings.prompt;
+        const dateInstructions = capabilities.calendar
+          ? `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`
+          : "";
         normalSystemPrompt =
-          voiceAgentSettings.prompt +
+          basePrompt +
           `\n\n${FIXED_OFFSCREEN_INSTRUCTIONS}` +
-          `\n\nToday's date is ${today}. Use this to interpret relative calendar dates such as Friday, Wednesday, or the 28th.`;
+          dateInstructions;
 
         voiceSession.send({
           type: "session.update",
@@ -614,7 +635,7 @@ async function connect() {
               voice: voiceAgentSettings.voice,
             },
 
-            tools: VOICE_TOOLS,
+            tools: voiceTools,
           },
         });
       },

@@ -319,8 +319,15 @@ such as Git status or a known test command.
 ### Deployment boundary
 
 The current loopback server, desktop Calendar OAuth, and local Codex CLI cannot
-simply be exposed as a public hosted service. Any deployment must explicitly
-separate hosted-safe capabilities from local-only ones.
+simply be exposed as a public hosted service. `OFFSCREEN_MODE` provides an
+application-owned capability boundary: its default `LOCAL` mode keeps the full
+developer feature set, while `HOSTED_DEMO` registers only the voice-token route
+plus the runtime capability payload and hosted-safe voice tools. In hosted-demo
+mode, Calendar, Codex, and browser MCP routes are not registered, and the
+browser receives only the safe tool capabilities from a server-generated runtime
+payload served with `Cache-Control: no-store`. Missing or malformed browser
+runtime capability data falls back to the hosted-safe feature set. This does not
+yet add public authentication or change loopback binding.
 
 ## Current external integrations
 

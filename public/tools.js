@@ -357,3 +357,33 @@ export const VOICE_TOOLS = [
     timeout_seconds: 45,
   },
 ];
+
+const CALENDAR_TOOL_NAMES = new Set(["get_calendar_events"]);
+const CODEX_TOOL_NAMES = new Set(["ask_codex"]);
+const BROWSER_TOOL_NAMES = new Set([
+  "browser_navigate",
+  "browser_read_page",
+  "browser_find_on_page",
+  "browser_go_back",
+  "browser_click",
+  "browser_type",
+  "browser_confirm_action",
+]);
+
+export function getVoiceTools(capabilities) {
+  return VOICE_TOOLS.filter((tool) => {
+    if (CALENDAR_TOOL_NAMES.has(tool.name)) {
+      return capabilities.calendar;
+    }
+
+    if (CODEX_TOOL_NAMES.has(tool.name)) {
+      return capabilities.codex;
+    }
+
+    if (BROWSER_TOOL_NAMES.has(tool.name)) {
+      return capabilities.browserControl;
+    }
+
+    return true;
+  });
+}

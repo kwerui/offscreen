@@ -132,6 +132,7 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
   const originalWindow = globalThis.window;
   const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   const originalAudioWorkletNode = globalThis.AudioWorkletNode;
+  const originalCapabilities = globalThis.__OFFSCREEN_CAPABILITIES__;
   const codexResponse = createDeferred();
   let codexFetchCalls = 0;
 
@@ -145,8 +146,15 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
       codexFetchCalls++;
       return codexResponse.promise;
     };
+    globalThis.__OFFSCREEN_CAPABILITIES__ = {
+      isHostedDemo: false,
+      calendar: true,
+      codex: true,
+      browserControl: true,
+    };
 
     await import(`../public/app.js?standby-test=${Date.now()}`);
+    assert.equal(elements.get("prompt").disabled, false);
     await elements.get("connect").listeners.click();
     const firstSocket = FakeWebSocket.instances.at(-1);
     firstSocket.open();
@@ -313,5 +321,6 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
     globalThis.window = originalWindow;
     Object.defineProperty(globalThis, "navigator", originalNavigator);
     globalThis.AudioWorkletNode = originalAudioWorkletNode;
+    globalThis.__OFFSCREEN_CAPABILITIES__ = originalCapabilities;
   }
 });

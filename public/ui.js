@@ -11,6 +11,7 @@ const els = {
   empty: document.getElementById("empty"),
   statusDot: document.getElementById("status-dot"),
   statusText: document.getElementById("status-text"),
+  hostedDemoNotice: document.getElementById("hosted-demo-notice"),
 };
 
 let userPartialElement = null;
@@ -43,6 +44,21 @@ export function setVoiceWakeButtonState(enabled, disabled = false) {
 export function setVoiceWakeUnavailable() {
   els.voiceWake.textContent = "Voice wake unavailable";
   els.voiceWake.disabled = true;
+}
+
+export function setHostedDemoNoticeVisible(visible) {
+  if (els.hostedDemoNotice) {
+    els.hostedDemoNotice.hidden = !visible;
+  }
+}
+
+export function setHostedDemoPrompt(prompt) {
+  if (!prompt) {
+    return;
+  }
+
+  els.prompt.value = prompt;
+  els.prompt.disabled = true;
 }
 
 export function setResumeListeningButtonDisabled(disabled) {

@@ -35,9 +35,12 @@ package merely to follow this guide.
    ```
 
 2. Set `ASSEMBLYAI_API_KEY` in `.env` to your own AssemblyAI key.
-3. Do not paste the key into source code, browser developer tools, screenshots,
+3. Leave `OFFSCREEN_MODE` unset or set it to `LOCAL` for complete local
+   development. Set it to the exact value `HOSTED_DEMO` only to exercise the
+   restricted hosted-demo capability surface.
+4. Do not paste the key into source code, browser developer tools, screenshots,
    chat messages, or commits.
-4. Keep Google OAuth client credentials in a local `credentials.json` at the
+5. Keep Google OAuth client credentials in a local `credentials.json` at the
    repository root. The current Calendar code looks for that exact local file.
 
 `.env`, `credentials.json`, and `token.json` must remain untracked. Check with
