@@ -13,7 +13,7 @@ Codex CLI to inspect the current project.
 ## Current features
 
 - Voice conversation through the AssemblyAI Voice Agent API.
-- Optional voice wake while disconnected: explicitly enable **Voice wake** in
+- Optional Wake Phrase while disconnected: explicitly enable **Wake Phrase** in
   the UI, then say “Connect Offscreen” to start the normal AssemblyAI session.
   The browser wake listener stops while Offscreen is connecting or connected
   and starts again after disconnect while the option remains enabled.
@@ -27,9 +27,19 @@ Codex CLI to inspect the current project.
 - Explicit voice cancellation: ask Offscreen to cancel the current in-progress
   tool work. This keeps the voice session connected.
 - Voice-first standby: ask Offscreen to pause listening or go on standby while
-  the voice session remains connected. Normal requests are ignored while in
-  standby; ask it to resume listening or disconnect, or use the Resume listening
-  UI button as a fallback.
+  the voice session remains connected. Offscreen releases the AssemblyAI
+  microphone path while paused and uses a narrow browser listener only for
+  “Resume listening” or “Disconnect”. The client also gates the final PCM send
+  boundary while standby is active, so background speech never becomes a Voice
+  Agent turn even if the browser delivers late audio frames. Brief descending
+  and ascending earcons confirm pause and resume without requiring visual
+  feedback. For a voice-triggered pause, microphone ownership transfers to the
+  local standby recognizer only after the AssemblyAI reply containing the pause
+  tool call has finished, preventing the recognizer from hearing the tail of the
+  user's own pause utterance. Model-generated standby acknowledgements remain
+  suppressed. The stateful **Pause Listening** / **Resume Listening** UI control
+  uses the same standby state. Wake Phrase remains disconnected-only
+  and never resumes a paused connected session.
 - Explicit voice repeat: ask Offscreen to repeat its most recent completed
   response.
 - Explicit voice summarize/shorten: ask Offscreen to summarize or shorten its

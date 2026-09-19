@@ -36,13 +36,13 @@ export function setDisconnectButtonDisabled(disabled) {
 
 export function setVoiceWakeButtonState(enabled, disabled = false) {
   els.voiceWake.textContent = enabled
-    ? "Disable voice wake"
-    : "Enable voice wake";
+    ? "Disable Wake Phrase"
+    : "Enable Wake Phrase";
   els.voiceWake.disabled = disabled;
 }
 
 export function setVoiceWakeUnavailable() {
-  els.voiceWake.textContent = "Voice wake unavailable";
+  els.voiceWake.textContent = "Wake Phrase unavailable";
   els.voiceWake.disabled = true;
 }
 
@@ -61,7 +61,10 @@ export function setHostedDemoPrompt(prompt) {
   els.prompt.disabled = true;
 }
 
-export function setResumeListeningButtonDisabled(disabled) {
+export function setListeningControlState(isPaused, disabled) {
+  els.resumeListening.textContent = isPaused
+    ? "Resume Listening"
+    : "Pause Listening";
   els.resumeListening.disabled = disabled;
 }
 

@@ -104,11 +104,13 @@ creation and closure, raw parsed inbound events, and JSON outbound messages.
 It does not know about UI, tool names, tool turns, active session IDs, or
 event meaning.
 
-`wake-listener.js` owns the optional browser `SpeechRecognition`/
-`webkitSpeechRecognition` lifecycle while Offscreen is disconnected. It
-matches only the configured wake phrase, restarts after an unexpected normal
-end while wake mode remains enabled, and stops before the normal AssemblyAI
-connection begins. It does not hold an AssemblyAI token or WebSocket.
+`wake-listener.js` owns bounded browser `SpeechRecognition`/
+`webkitSpeechRecognition` phrase listening. The disconnected wake listener
+matches only “Connect Offscreen”. While a connected session is in standby,
+the AssemblyAI microphone path is released and a separate local listener
+accepts only the fixed resume/disconnect commands. These listeners never hold
+an AssemblyAI token or WebSocket, and they are not active at the same time as
+normal AssemblyAI microphone capture.
 
 `website-tool.js` owns supported-site lookup and opening allowlisted URLs in a
 new browser tab.
@@ -292,7 +294,9 @@ with its original `call_id` before the old completion can be ignored.
   its client-owned context cannot cancel the work it reports.
 - Codex cancellation resolves the original `call_id`; late completions are
   ignored.
-- Standby and wake remain client-owned browser behavior.
+- Standby and wake remain client-owned browser behavior. Standby keeps the
+  WebSocket connected but releases normal AssemblyAI microphone capture; only
+  the bounded local resume/disconnect listener owns speech while paused.
 - UI activity status is feedback, not authoritative lifecycle state.
 
 ### Google Calendar flow

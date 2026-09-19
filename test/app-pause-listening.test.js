@@ -33,6 +33,35 @@ class FakeWebSocket {
   }
 }
 
+
+class FakeSpeechRecognition {
+  static instances = [];
+
+  constructor() {
+    this.startCalls = 0;
+    this.stopCalls = 0;
+    FakeSpeechRecognition.instances.push(this);
+  }
+
+  start() {
+    this.startCalls++;
+  }
+
+  stop() {
+    this.stopCalls++;
+  }
+
+  receiveTranscript(text) {
+    const result = [{ transcript: text }];
+    result.isFinal = true;
+    this.onresult?.({ resultIndex: 0, results: [result] });
+  }
+
+  end() {
+    this.onend?.();
+  }
+}
+
 function createDeferred() {
   let resolve;
   const promise = new Promise((nextResolve) => {
@@ -80,7 +109,9 @@ function setUpBrowserEnvironment() {
     createElement,
     getElementById: (id) => elements.get(id),
   };
+  FakeSpeechRecognition.instances = [];
   globalThis.window = {
+    SpeechRecognition: FakeSpeechRecognition,
     AudioContext: class {
       constructor() {
         this.audioWorklet = { addModule: async () => {} };
@@ -91,20 +122,46 @@ function setUpBrowserEnvironment() {
       createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     },
   };
-  globalThis.AudioWorkletNode = class {
+  class FakeAudioWorkletNode {
+    static instances = [];
+
     constructor() {
       this.port = {};
+      FakeAudioWorkletNode.instances.push(this);
+    }
+
+    emitAudio(bytes = new Uint8Array([1, 2, 3, 4]).buffer) {
+      this.port.onmessage?.({ data: bytes });
     }
 
     disconnect() {}
-  };
+  }
+  globalThis.AudioWorkletNode = FakeAudioWorkletNode;
+  const microphoneTracks = [];
+  let microphoneRequestCount = 0;
   Object.defineProperty(globalThis, "navigator", {
     configurable: true,
-    value: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) } },
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => {
+          microphoneRequestCount++;
+          const track = {
+            stopCalls: 0,
+            stop() { this.stopCalls++; },
+          };
+          microphoneTracks.push(track);
+          return { getTracks: () => [track] };
+        },
+      },
+    },
   });
   globalThis.WebSocket = FakeWebSocket;
 
-  return elements;
+  return {
+    elements,
+    microphoneTracks,
+    getMicrophoneRequestCount: () => microphoneRequestCount,
+  };
 }
 
 async function flushPromises() {
@@ -137,7 +194,11 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
   let codexFetchCalls = 0;
 
   try {
-    const elements = setUpBrowserEnvironment();
+    const {
+      elements,
+      microphoneTracks,
+      getMicrophoneRequestCount,
+    } = setUpBrowserEnvironment();
     globalThis.fetch = async (url) => {
       if (url === "/api/voice-token") {
         return { ok: true, json: async () => ({ token: "test-token" }) };
@@ -160,6 +221,34 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
     const firstSocket = FakeWebSocket.instances.at(-1);
     firstSocket.open();
     firstSocket.receive({ type: "session.ready", session_id: "first" });
+    assert.equal(elements.get("resume-listening").textContent, "Pause Listening");
+
+    const captureNode = globalThis.AudioWorkletNode.instances.at(-1);
+    captureNode.emitAudio();
+    assert.equal(
+      firstSocket.sentMessages.filter((message) => message.type === "input.audio").length,
+      1
+    );
+
+    elements.get("resume-listening").listeners.click();
+    captureNode.emitAudio();
+    assert.equal(
+      firstSocket.sentMessages.filter((message) => message.type === "input.audio").length,
+      1,
+      "standby must block PCM at the final WebSocket send boundary"
+    );
+    assert.equal(elements.get("resume-listening").textContent, "Resume Listening");
+    assert.match(latestSessionUpdate(firstSocket).session.system_prompt, /You are in standby/);
+    assert.equal(microphoneTracks[0].stopCalls, 1);
+    assert.equal(FakeSpeechRecognition.instances.length, 1);
+    assert.equal(FakeSpeechRecognition.instances[0].startCalls, 1);
+
+    elements.get("resume-listening").listeners.click();
+    await flushPromises();
+    assert.equal(elements.get("resume-listening").textContent, "Pause Listening");
+    assert.doesNotMatch(latestSessionUpdate(firstSocket).session.system_prompt, /You are in standby/);
+    assert.equal(getMicrophoneRequestCount(), 2);
+    assert.equal(FakeSpeechRecognition.instances[0].stopCalls, 1);
 
     firstSocket.receive({
       type: "tool.call",
@@ -174,16 +263,41 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
       call_id: "pause-call",
       arguments: {},
     });
+
+    assert.equal(
+      elements.get("status-text").textContent,
+      "Pausing listening…",
+      "voice pause must defer local standby-listener ownership until reply.done"
+    );
+
     firstSocket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
 
-    assert.equal(elements.get("resume-listening").disabled, false);
     assert.equal(
       elements.get("status-text").textContent,
-      'Standby — audio is still transcribed for “resume listening” or “disconnect”; other speech is ignored.'
+      'Standby — say “Resume listening” or “Disconnect”; other speech is not sent to the Voice Agent.',
+      "the local standby listener should take ownership after reply.done"
+    );
+
+    assert.equal(elements.get("resume-listening").disabled, false);
+    assert.equal(elements.get("resume-listening").textContent, "Resume Listening");
+    assert.equal(
+      elements.get("status-text").textContent,
+      'Standby — say “Resume listening” or “Disconnect”; other speech is not sent to the Voice Agent.'
     );
     assert.match(latestSessionUpdate(firstSocket).session.system_prompt, /You are in standby/);
     assert.deepEqual(latestSessionUpdate(firstSocket).session.tools, []);
+
+    // The model may try to speak an acknowledgement after the pause tool
+    // result. Keep it suppressed so the local standby recognizer cannot hear
+    // Offscreen's own speaker output and accidentally resume the session.
+    const bubbleCountBeforePauseAck = elements.get("transcript").children.length;
+    firstSocket.receive({ type: "reply.started" });
+    firstSocket.receive({ type: "reply.audio", data: "AQAA" });
+    firstSocket.receive({ type: "transcript.agent", text: "OK. I'm on standby." });
+    firstSocket.receive({ type: "reply.done", status: "completed" });
+    assert.equal(elements.get("transcript").children.length, bubbleCountBeforePauseAck);
+    assert.equal(elements.get("resume-listening").textContent, "Resume Listening");
 
     const sessionUpdateCount = firstSocket.sentMessages.filter(
       (message) => message.type === "session.update"
@@ -212,7 +326,7 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
     assert.equal(elements.get("resume-listening").disabled, false);
     assert.equal(
       elements.get("status-text").textContent,
-      'Standby — audio is still transcribed for “resume listening” or “disconnect”; other speech is ignored.'
+      'Standby — say “Resume listening” or “Disconnect”; other speech is not sent to the Voice Agent.'
     );
     assert.equal(
       firstSocket.sentMessages.filter((message) => message.type === "session.update").length,
@@ -239,13 +353,23 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
       error: "Tool calls are unavailable while Offscreen is in standby.",
     });
 
-    firstSocket.receive({ type: "transcript.user", text: "resume listening" });
-    const resumeBubble = elements.get("transcript").children.at(-1);
-    assert.equal(resumeBubble.children.some((child) => child.textContent === "ignored in standby"), false);
-    assert.equal(elements.get("resume-listening").disabled, true);
+    const standbyRecognition = FakeSpeechRecognition.instances.at(-1);
+    const bubbleCountBeforeLocalResume = elements.get("transcript").children.length;
+    standbyRecognition.receiveTranscript("Resume listening!");
+    await flushPromises();
+    assert.equal(elements.get("transcript").children.length, bubbleCountBeforeLocalResume);
+    assert.equal(elements.get("resume-listening").disabled, false);
+    assert.equal(elements.get("resume-listening").textContent, "Pause Listening");
     assert.equal(elements.get("status-text").textContent, "Connected");
     assert.deepEqual(latestSessionUpdate(firstSocket).session.tools, VOICE_TOOLS);
     assert.doesNotMatch(latestSessionUpdate(firstSocket).session.system_prompt, /You are in standby/);
+
+    firstSocket.receive({ type: "transcript.user", text: "what time is it" });
+    const normalRequestBubble = elements.get("transcript").children.at(-1);
+    assert.equal(
+      normalRequestBubble.children.some((child) => child.textContent === "ignored in standby"),
+      false
+    );
 
     // Leaving standby clears reply suppression so normal agent output is shown.
     const bubbleCountAfterResume = elements.get("transcript").children.length;
@@ -254,27 +378,29 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
     firstSocket.receive({ type: "reply.done", status: "completed" });
     assert.equal(elements.get("transcript").children.length, bubbleCountAfterResume + 1);
 
-    // If resume happens while an ignored standby reply is still open, the old
-    // reply stays suppressed until its reply.done, then normal output resumes.
+    // Any stale AssemblyAI transcript received after pausing is ignored and
+    // cannot resume the session. Only the local standby recognizer owns resume.
     firstSocket.receive({
       type: "tool.call",
       name: "pause_listening",
-      call_id: "pause-for-overlap-call",
+      call_id: "pause-for-local-resume-call",
       arguments: {},
     });
     firstSocket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
-    firstSocket.receive({ type: "transcript.user", text: "ignore this" });
-    firstSocket.receive({ type: "reply.started" });
-    const bubbleCountBeforeOverlapResume = elements.get("transcript").children.length;
+    const localResumeRecognition = FakeSpeechRecognition.instances.at(-1);
+    const bubbleCountBeforeStaleResume = elements.get("transcript").children.length;
     firstSocket.receive({ type: "transcript.user", text: "resume listening" });
-    firstSocket.receive({ type: "transcript.agent", text: "Late standby reply." });
-    assert.equal(elements.get("transcript").children.length, bubbleCountBeforeOverlapResume + 1);
-    firstSocket.receive({ type: "reply.done", status: "interrupted" });
-    firstSocket.receive({ type: "reply.started" });
-    firstSocket.receive({ type: "transcript.agent", text: "Listening again after interruption." });
-    firstSocket.receive({ type: "reply.done", status: "completed" });
-    assert.equal(elements.get("transcript").children.length, bubbleCountBeforeOverlapResume + 2);
+    assert.equal(elements.get("resume-listening").textContent, "Resume Listening");
+    assert.equal(elements.get("transcript").children.length, bubbleCountBeforeStaleResume + 1);
+    assert.equal(
+      elements.get("transcript").children.at(-1).children.at(-1)?.textContent,
+      "ignored in standby"
+    );
+    localResumeRecognition.receiveTranscript("resume listening");
+    await flushPromises();
+    assert.equal(elements.get("resume-listening").textContent, "Pause Listening");
+    assert.equal(elements.get("status-text").textContent, "Connected");
 
     firstSocket.receive({
       type: "tool.call",
@@ -285,7 +411,9 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
     firstSocket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
     elements.get("resume-listening").listeners.click();
-    assert.equal(elements.get("resume-listening").disabled, true);
+    await flushPromises();
+    assert.equal(elements.get("resume-listening").disabled, false);
+    assert.equal(elements.get("resume-listening").textContent, "Pause Listening");
     assert.equal(elements.get("status-text").textContent, "Connected");
 
     firstSocket.receive({
@@ -296,7 +424,8 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
     });
     firstSocket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
-    firstSocket.receive({ type: "transcript.user", text: "disconnect" });
+    const disconnectRecognition = FakeSpeechRecognition.instances.at(-1);
+    disconnectRecognition.receiveTranscript("disconnect");
     assert.equal(firstSocket.readyState, FakeWebSocket.CLOSED);
 
     await elements.get("connect").listeners.click();

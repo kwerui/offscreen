@@ -1,15 +1,16 @@
-function normalizeWakePhrase(text) {
+function normalizeSpokenPhrase(text) {
   return text
     ?.trim()
     .toLowerCase()
-    .replace(/[.,!?;:]+$/, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
     .replace(/\boff[\s-]+screen\b/g, "offscreen")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-export function createWakeListener({
-  phrase,
-  onWake,
+export function createPhraseListener({
+  phrases,
+  onPhrase,
   onError = () => {},
 }) {
   const SpeechRecognition =
@@ -24,7 +25,11 @@ export function createWakeListener({
     };
   }
 
-  const normalizedPhrase = normalizeWakePhrase(phrase);
+  const normalizedPhrases = new Set(
+    phrases
+      .map((phrase) => normalizeSpokenPhrase(phrase))
+      .filter(Boolean)
+  );
   let recognition = null;
   let shouldListen = false;
   let isRunning = false;
@@ -54,9 +59,11 @@ export function createWakeListener({
           continue;
         }
 
-        const transcript = result[0]?.transcript;
+        const normalizedTranscript = normalizeSpokenPhrase(
+          result[0]?.transcript
+        );
 
-        if (normalizeWakePhrase(transcript) !== normalizedPhrase) {
+        if (!normalizedPhrases.has(normalizedTranscript)) {
           continue;
         }
 
@@ -65,10 +72,10 @@ export function createWakeListener({
         try {
           recognition.stop();
         } catch {
-          // The recognizer may already be ending. The wake action can still run.
+          // The recognizer may already be ending. The phrase action can still run.
         }
 
-        onWake();
+        onPhrase(normalizedTranscript);
         return;
       }
     };
@@ -79,9 +86,6 @@ export function createWakeListener({
 
       if (isFatal) {
         shouldListen = false;
-      }
-
-      if (isFatal) {
         onError(error);
       }
     };
@@ -151,4 +155,16 @@ export function createWakeListener({
     stop,
     isActive: () => shouldListen,
   };
+}
+
+export function createWakeListener({
+  phrase,
+  onWake,
+  onError = () => {},
+}) {
+  return createPhraseListener({
+    phrases: [phrase],
+    onPhrase: () => onWake(),
+    onError,
+  });
 }

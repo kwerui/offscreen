@@ -135,6 +135,14 @@ async function flushPromises() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+function findToolResult(socket, callId) {
+  const message = socket.sentMessages.find(
+    (item) => item.type === "tool.result" && item.call_id === callId
+  );
+
+  return message && JSON.parse(message.result);
+}
+
 test("voice wake connects only on the wake phrase and restarts after disconnect", async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
@@ -155,7 +163,7 @@ test("voice wake connects only on the wake phrase and restarts after disconnect"
 
     await import(`../public/app.js?voice-wake-test=${Date.now()}`);
 
-    assert.equal(elements.get("voice-wake").textContent, "Enable voice wake");
+    assert.equal(elements.get("voice-wake").textContent, "Enable Wake Phrase");
     assert.equal(elements.get("voice-wake").disabled, false);
 
     elements.get("voice-wake").listeners.click();
@@ -164,7 +172,7 @@ test("voice wake connects only on the wake phrase and restarts after disconnect"
     assert.ok(recognition);
     assert.equal(recognition.startCalls, 1);
     assert.equal(FakeSpeechRecognition.instances.length, 1);
-    assert.equal(elements.get("voice-wake").textContent, "Disable voice wake");
+    assert.equal(elements.get("voice-wake").textContent, "Disable Wake Phrase");
     assert.equal(
       elements.get("status-text").textContent,
       'Disconnected — browser speech recognition is listening for “Connect Offscreen”'
@@ -175,6 +183,11 @@ test("voice wake connects only on the wake phrase and restarts after disconnect"
     assert.equal(FakeWebSocket.instances.length, 0);
 
     recognition.receiveTranscript("Connect Offscreen.");
+    assert.equal(
+      elements.get("status-text").textContent,
+      "Wake phrase heard — connecting…"
+    );
+    assert.equal(elements.get("transcript").children.length, 0);
     recognition.end();
     await flushPromises();
 
@@ -187,9 +200,31 @@ test("voice wake connects only on the wake phrase and restarts after disconnect"
     socket.receive({ type: "session.ready", session_id: "wake-session" });
 
     assert.equal(elements.get("status-text").textContent, "Connected (wake-session)");
-    assert.equal(elements.get("voice-wake").textContent, "Disable voice wake");
+    assert.equal(elements.get("voice-wake").textContent, "Disable Wake Phrase");
     assert.equal(elements.get("voice-wake").disabled, false);
     assert.equal(FakeSpeechRecognition.instances.length, 1);
+
+    recognition.end();
+    await flushPromises();
+
+    socket.receive({
+      type: "tool.call",
+      name: "enable_wake_phrase",
+      call_id: "enable-wake-call",
+      arguments: {},
+    });
+    await flushPromises();
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    assert.deepEqual(findToolResult(socket, "enable-wake-call"), {
+      success: true,
+      enabled: true,
+      message: "Wake phrase enabled.",
+    });
+    assert.equal(elements.get("voice-wake").textContent, "Disable Wake Phrase");
+    assert.equal(FakeSpeechRecognition.instances.length, 1);
+    assert.equal(recognition.startCalls, 1);
 
     elements.get("disconnect").listeners.click();
 
@@ -200,11 +235,84 @@ test("voice wake connects only on the wake phrase and restarts after disconnect"
       'Disconnected — browser speech recognition is listening for “Connect Offscreen”'
     );
 
-    elements.get("voice-wake").listeners.click();
+    await elements.get("connect").listeners.click();
+    const secondSocket = FakeWebSocket.instances.at(-1);
+    secondSocket.open();
+    secondSocket.receive({ type: "session.ready", session_id: "wake-session-two" });
+    secondSocket.receive({
+      type: "tool.call",
+      name: "disable_wake_phrase",
+      call_id: "disable-wake-call",
+      arguments: {},
+    });
+    await flushPromises();
+    secondSocket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
 
-    assert.equal(elements.get("voice-wake").textContent, "Enable voice wake");
-    assert.equal(elements.get("status-text").textContent, "Disconnected");
+    assert.deepEqual(findToolResult(secondSocket, "disable-wake-call"), {
+      success: true,
+      enabled: false,
+      message: "Wake phrase disabled.",
+    });
+    assert.equal(elements.get("voice-wake").textContent, "Enable Wake Phrase");
+    assert.equal(FakeSpeechRecognition.instances.length, 1);
+
+    secondSocket.receive({
+      type: "tool.call",
+      name: "disable_wake_phrase",
+      call_id: "disable-wake-again-call",
+      arguments: {},
+    });
+    await flushPromises();
+    secondSocket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+    assert.deepEqual(findToolResult(secondSocket, "disable-wake-again-call"), {
+      success: true,
+      enabled: false,
+      message: "Wake phrase disabled.",
+    });
+
+    secondSocket.receive({
+      type: "tool.call",
+      name: "enable_wake_phrase",
+      call_id: "enable-after-disable-call",
+      arguments: {},
+    });
+    await flushPromises();
+    secondSocket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+    assert.deepEqual(findToolResult(secondSocket, "enable-after-disable-call"), {
+      success: true,
+      enabled: true,
+      message: "Wake phrase enabled.",
+    });
+    assert.equal(elements.get("voice-wake").textContent, "Disable Wake Phrase");
+    assert.equal(FakeSpeechRecognition.instances.length, 1);
+
+    elements.get("disconnect").listeners.click();
+    assert.equal(
+      elements.get("status-text").textContent,
+      'Disconnected — browser speech recognition is listening for “Connect Offscreen”'
+    );
     assert.equal(recognition.stopCalls, 2);
+
+    await elements.get("connect").listeners.click();
+    const thirdSocket = FakeWebSocket.instances.at(-1);
+    thirdSocket.open();
+    thirdSocket.receive({ type: "session.ready", session_id: "wake-session-three" });
+    thirdSocket.receive({
+      type: "tool.call",
+      name: "disable_wake_phrase",
+      call_id: "disable-before-disconnect-call",
+      arguments: {},
+    });
+    await flushPromises();
+    thirdSocket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    elements.get("disconnect").listeners.click();
+    assert.equal(elements.get("status-text").textContent, "Disconnected");
+    assert.equal(recognition.startCalls, 2);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.WebSocket = originalWebSocket;

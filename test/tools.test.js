@@ -89,6 +89,20 @@ test("defines a no-argument pause_listening voice tool", () => {
   assert.match(pauseTool.description, /standby/i);
 });
 
+test("defines exact no-argument Wake Phrase preference tools", () => {
+  for (const name of ["enable_wake_phrase", "disable_wake_phrase"]) {
+    const tool = VOICE_TOOLS.find((candidate) => candidate.name === name);
+
+    assert.ok(tool, `${name} should be defined`);
+    assert.deepEqual(tool.parameters, {
+      type: "object",
+      properties: {},
+      required: [],
+    });
+    assert.match(tool.description, /wake phrase/i);
+  }
+});
+
 test("defines a no-argument repeat_last_response voice tool", () => {
   const repeatTool = VOICE_TOOLS.find(
     (tool) => tool.name === "repeat_last_response"

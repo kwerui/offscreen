@@ -8,7 +8,7 @@ import {
   setConnectButtonDisabled,
   setDisconnectButtonDisabled,
   setHostedDemoPrompt,
-  setResumeListeningButtonDisabled,
+  setListeningControlState,
   setStatus,
   setVoiceWakeButtonState,
   setVoiceWakeUnavailable,
@@ -19,7 +19,10 @@ import {
 import {
   flushPlayback,
   hasAudioResources,
+  pauseMicrophoneCapture,
+  playListeningStateCue,
   playPCM,
+  prepareMicrophoneCapture,
   setUpAudio,
   startMicrophoneCapture,
   tearDownAudio,
@@ -44,7 +47,7 @@ import {
 } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createVoiceSession } from "./voice-session.js";
-import { createWakeListener } from "./wake-listener.js";
+import { createPhraseListener, createWakeListener } from "./wake-listener.js";
 
 const capabilities = getRuntimeCapabilities(
   globalThis.__OFFSCREEN_CAPABILITIES__
@@ -60,6 +63,10 @@ let voiceWakeEnabled = false;
 let normalSystemPrompt = "";
 
 let suppressStandbyReply = false;
+
+let standbyResumePending = false;
+
+let standbyListenerPending = false;
 
 let activeToolTurnId = 0;
 
@@ -132,7 +139,11 @@ const FIXED_OFFSCREEN_INSTRUCTIONS =
   "any other tool, and answer directly without a preface when possible. When it " +
   "fails, briefly state that no completed response is available. When the user " +
   "explicitly asks Offscreen to pause listening, stop listening, or go on standby, " +
-  "ALWAYS call pause_listening. When the user asks what Offscreen is currently " +
+  "ALWAYS call pause_listening. When the user explicitly says 'enable wake phrase', " +
+  "ALWAYS call enable_wake_phrase; after success, say exactly 'Wake phrase enabled.' " +
+  "When the user explicitly says 'disable wake phrase', ALWAYS call " +
+  "disable_wake_phrase; after success, say exactly 'Wake phrase disabled.' When the " +
+  "user asks what Offscreen is currently " +
   "doing, working on, or running, answer only from the Current Offscreen activity " +
   "context in the system prompt. Do not call a tool, advertise capabilities, or " +
   "reinterpret that question as a new task. If nothing is running, say so briefly.";
@@ -149,9 +160,6 @@ const STANDBY_INSTRUCTIONS =
 
 const STANDBY_RESUME_COMMANDS = new Set([
   "resume listening",
-  "start listening again",
-  "continue listening",
-  "leave standby",
 ]);
 
 const STANDBY_DISCONNECT_COMMANDS = new Set([
@@ -411,13 +419,7 @@ function isCurrentActivityQuery(text) {
   return CURRENT_ACTIVITY_QUERIES.has(normalizedText);
 }
 
-function getStandbyCommand(text) {
-  const normalizedText = text
-    ?.trim()
-    .toLowerCase()
-    .replace(/[.?!]+$/, "")
-    .replace(/\s+/g, " ");
-
+function getStandbyLocalCommand(normalizedText) {
   if (STANDBY_RESUME_COMMANDS.has(normalizedText)) {
     return "resume";
   }
@@ -429,7 +431,75 @@ function getStandbyCommand(text) {
   return null;
 }
 
-function enterStandby(sessionId) {
+function startStandbyListener() {
+  if (!standbyMode || !voiceSession.isOpen()) {
+    return false;
+  }
+
+  if (!standbyListener.isSupported()) {
+    setStatus(
+      "connected",
+      "Standby — use Resume Listening or Disconnect controls."
+    );
+    return false;
+  }
+
+  if (!standbyListener.start()) {
+    setStatus(
+      "connected",
+      "Standby — voice resume unavailable; use Resume Listening."
+    );
+    return false;
+  }
+
+  setStatus(
+    "connected",
+    'Standby — say “Resume listening” or “Disconnect”; other speech is not sent to the Voice Agent.'
+  );
+  return true;
+}
+
+function handleStandbyPhrase(normalizedPhrase) {
+  if (!standbyMode || !voiceSession.isOpen()) {
+    return;
+  }
+
+  const command = getStandbyLocalCommand(normalizedPhrase);
+
+  if (command === "resume") {
+    void leaveStandby();
+  } else if (command === "disconnect") {
+    endActiveSession();
+  }
+}
+
+function handleStandbyListenerError(error) {
+  console.warn("Standby listener error:", error);
+
+  if (!standbyMode || !voiceSession.isOpen()) {
+    return;
+  }
+
+  setStatus(
+    "connected",
+    "Standby — voice resume unavailable; use Resume Listening."
+  );
+}
+
+function activateStandbyListener() {
+  if (!standbyMode || standbyResumePending || !voiceSession.isOpen()) {
+    standbyListenerPending = false;
+    return false;
+  }
+
+  standbyListenerPending = false;
+  flushPlayback();
+  const listenerStarted = startStandbyListener();
+  playListeningStateCue("paused");
+  return listenerStarted;
+}
+
+function enterStandby(sessionId, { deferLocalListener = false } = {}) {
   if (!isActiveSession(sessionId) || !voiceSession.isOpen()) {
     return;
   }
@@ -437,33 +507,103 @@ function enterStandby(sessionId) {
   if (!standbyMode) {
     clearPendingBrowserConfirmation(true);
     standbyMode = true;
+    standbyResumePending = false;
+    standbyListenerPending = deferLocalListener;
     suppressStandbyReply = false;
     updateSystemPrompt();
+    pauseMicrophoneCapture();
+  } else if (deferLocalListener) {
+    standbyListenerPending = true;
   }
 
-  setResumeListeningButtonDisabled(false);
-  setStatus(
-    "connected",
-    'Standby — audio is still transcribed for “resume listening” or “disconnect”; other speech is ignored.'
-  );
-}
+  setListeningControlState(true, false);
 
-function leaveStandby() {
-  if (!standbyMode || !voiceSession.isOpen()) {
+  if (standbyListenerPending) {
+    setStatus("connected", "Pausing listening…");
     return;
   }
 
-  standbyMode = false;
+  activateStandbyListener();
+}
 
-  // If the user resumes while an ignored standby reply is still finishing,
-  // keep suppressing that old reply until its reply.done arrives.
-  if (!isAgentReplyOpen) {
-    suppressStandbyReply = false;
+async function leaveStandby() {
+  if (
+    !standbyMode ||
+    standbyResumePending ||
+    !voiceSession.isOpen()
+  ) {
+    return;
   }
 
-  updateSystemPrompt();
-  setResumeListeningButtonDisabled(true);
-  setStatus("connected", "Connected");
+  const sessionId = activeSessionId;
+  standbyResumePending = true;
+  standbyListenerPending = false;
+  standbyListener.stop();
+  setListeningControlState(true, true);
+  setStatus("connected", "Resuming listening…");
+
+  try {
+    const microphoneWasPrepared = await prepareMicrophoneCapture({
+      isSessionActive: () =>
+        isActiveSession(sessionId) &&
+        voiceSession.isOpen() &&
+        standbyMode,
+    });
+
+    if (!microphoneWasPrepared) {
+      if (
+        isActiveSession(sessionId) &&
+        voiceSession.isOpen() &&
+        standbyMode
+      ) {
+        throw new Error("Microphone capture unavailable");
+      }
+
+      return;
+    }
+
+    if (
+      !isActiveSession(sessionId) ||
+      !voiceSession.isOpen() ||
+      !standbyMode
+    ) {
+      return;
+    }
+
+    standbyMode = false;
+
+    // No AssemblyAI audio is sent during standby, so the resume phrase cannot
+    // create a stale model reply. Keep this guard for any already-open reply
+    // that predates entering standby.
+    if (!isAgentReplyOpen) {
+      suppressStandbyReply = false;
+    }
+
+    updateSystemPrompt();
+    setListeningControlState(false, false);
+    setStatus("connected", "Connected");
+    startMicrophoneCapture();
+    playListeningStateCue("listening");
+  } catch (err) {
+    if (!isActiveSession(sessionId) || !voiceSession.isOpen()) {
+      return;
+    }
+
+    console.error("Microphone resume error:", err.cause || err);
+    setListeningControlState(true, false);
+    startStandbyListener();
+  } finally {
+    standbyResumePending = false;
+  }
+}
+
+function toggleListening() {
+  if (standbyMode) {
+    void leaveStandby();
+    return;
+  }
+
+  enterStandby(activeSessionId);
 }
 
 const voiceSession = createVoiceSession();
@@ -477,7 +617,7 @@ function handleVoiceWake() {
     return;
   }
 
-  void connect();
+  void connect("Wake phrase heard — connecting…");
 }
 
 function handleVoiceWakeError(error) {
@@ -486,7 +626,7 @@ function handleVoiceWakeError(error) {
   voiceWakeEnabled = false;
   updateVoiceWakeButton();
 
-  let statusText = `Voice wake error (${error})`;
+  let statusText = "Wake Phrase is unavailable";
 
   if (error === "audio-capture") {
     statusText = "Voice wake microphone unavailable";
@@ -503,6 +643,15 @@ const wakeListener = createWakeListener({
   onError: handleVoiceWakeError,
 });
 
+const standbyListener = createPhraseListener({
+  phrases: [
+    ...STANDBY_RESUME_COMMANDS,
+    ...STANDBY_DISCONNECT_COMMANDS,
+  ],
+  onPhrase: handleStandbyPhrase,
+  onError: handleStandbyListenerError,
+});
+
 function updateVoiceWakeButton(disabled = false) {
   if (!wakeListener.isSupported()) {
     setVoiceWakeUnavailable();
@@ -510,6 +659,36 @@ function updateVoiceWakeButton(disabled = false) {
   }
 
   setVoiceWakeButtonState(voiceWakeEnabled, disabled);
+}
+
+function setVoiceWakePreference(enabled) {
+  if (!wakeListener.isSupported()) {
+    return false;
+  }
+
+  voiceWakeEnabled = enabled;
+  updateVoiceWakeButton();
+
+  if (!enabled) {
+    wakeListener.stop();
+
+    if (!voiceSession.hasConnection() && !hasAudioResources()) {
+      setStatus("", "Disconnected");
+    }
+
+    return true;
+  }
+
+  if (voiceSession.hasConnection() || hasAudioResources()) {
+    return true;
+  }
+
+  if (wakeListener.start()) {
+    setStatus("", VOICE_WAKE_STATUS);
+    return true;
+  }
+
+  return false;
 }
 
 updateVoiceWakeButton();
@@ -614,13 +793,15 @@ function endActiveSession(statusState = "", statusText = "Disconnected") {
   teardown(statusState, statusText);
 }
 
-async function connect() {
+async function connect(connectionStatus = "Requesting token…") {
   const sessionId = activeSessionId + 1;
 
   wakeListener.stop();
   resetStoredAgentResponses();
   standbyMode = false;
-  setResumeListeningButtonDisabled(true);
+  standbyResumePending = false;
+  standbyListenerPending = false;
+  setListeningControlState(false, true);
   updateVoiceWakeButton(true);
 
   if (voiceSession.hasConnection() || hasAudioResources()) {
@@ -632,7 +813,7 @@ async function connect() {
 
   setConnectButtonDisabled(true);
 
-  setStatus("connecting", "Requesting token…");
+  setStatus("connecting", connectionStatus);
 
   try {
     await voiceSession.connect({
@@ -641,7 +822,7 @@ async function connect() {
           const audioWasSetUp = await setUpAudio({
             isSessionActive: () => isActiveSession(sessionId),
             onMicrophoneAudio: (audio) => {
-              if (!isActiveSession(sessionId)) {
+              if (!isActiveSession(sessionId) || standbyMode) {
                 return;
               }
 
@@ -774,7 +955,7 @@ function handleEvent(event, sessionId) {
       setStatus("connected", `Connected (${event.session_id})`);
 
       setDisconnectButtonDisabled(false);
-      setResumeListeningButtonDisabled(true);
+      setListeningControlState(false, false);
       updateVoiceWakeButton();
 
       startMicrophoneCapture();
@@ -821,19 +1002,12 @@ function handleEvent(event, sessionId) {
       }
 
       if (standbyMode) {
-        const standbyCommand = getStandbyCommand(event.text);
-        const transcriptMeta = standbyCommand ? null : "ignored in standby";
-
-        finalizeUserTranscript(event.text, transcriptMeta);
-
-        if (standbyCommand === "resume") {
-          leaveStandby();
-        } else if (standbyCommand === "disconnect") {
-          endActiveSession();
-        } else {
-          suppressStandbyReply = true;
-        }
-
+        // AssemblyAI should receive no new microphone audio while paused.
+        // Any transcript that still arrives here is stale/in-flight and must
+        // never control standby. Resume/disconnect are owned by the local
+        // standby listener.
+        finalizeUserTranscript(event.text, "ignored in standby");
+        suppressStandbyReply = true;
         return;
       }
 
@@ -904,7 +1078,7 @@ function handleEvent(event, sessionId) {
 
       toolResultCoordinator.startTask();
 
-      if (standbyMode) {
+      if (standbyMode || suppressStandbyReply) {
         // Standby is client-controlled. A stale or misclassified model tool
         // call must never escape standby and execute real work.
         suppressStandbyReply = true;
@@ -942,6 +1116,15 @@ function handleEvent(event, sessionId) {
       isAgentReplyOpen = false;
 
       if (suppressStandbyReply) {
+        if (standbyMode && standbyListenerPending) {
+          // A voice-triggered pause begins while AssemblyAI is still closing
+          // the reply that contained the pause tool call. Starting the local
+          // recognizer before this boundary can let it hear the tail of the
+          // user's own "Pause listening" utterance. Hand microphone ownership
+          // to the local standby listener only after that reply is complete.
+          activateStandbyListener();
+        }
+
         if (!standbyMode) {
           suppressStandbyReply = false;
         }
@@ -988,13 +1171,52 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // ---------------------------------
 
   if (event.name === "pause_listening") {
-    enterStandby(sessionId);
+    enterStandby(sessionId, { deferLocalListener: true });
+
+    // Pause is a client-owned state transition. Do not let the model speak a
+    // post-tool acknowledgement such as “OK, I’m on standby” after the local
+    // standby recognizer has started: the browser recognizer can hear speaker
+    // output and accidentally interpret it as a resume command. The local
+    // descending earcon is the eyes-free pause acknowledgement instead.
+    suppressStandbyReply = true;
 
     toolResultCoordinator.queueResult(
       sessionId,
       toolTurnId,
       event.call_id,
       { success: true, standby: true }
+    );
+
+    return;
+  }
+
+  // ---------------------------------
+  // WAKE PHRASE PREFERENCE
+  // ---------------------------------
+
+  if (
+    event.name === "enable_wake_phrase" ||
+    event.name === "disable_wake_phrase"
+  ) {
+    const enabled = event.name === "enable_wake_phrase";
+    const updated = setVoiceWakePreference(enabled);
+
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      updated
+        ? {
+            success: true,
+            enabled,
+            message: enabled
+              ? "Wake phrase enabled."
+              : "Wake phrase disabled.",
+          }
+        : {
+            success: false,
+            error: "Wake Phrase is unavailable in this browser.",
+          }
     );
 
     return;
@@ -1560,15 +1782,18 @@ function teardown(
   pendingSearchResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
+  standbyResumePending = false;
+  standbyListenerPending = false;
   normalSystemPrompt = "";
 
+  standbyListener.stop();
   voiceSession.disconnect();
   tearDownAudio();
   resetUserPartialTranscript();
   setStatus(statusState, statusText);
   setConnectButtonDisabled(false);
   setDisconnectButtonDisabled(true);
-  setResumeListeningButtonDisabled(true);
+  setListeningControlState(false, true);
   updateVoiceWakeButton();
 
   if (restartVoiceWake && voiceWakeEnabled && wakeListener.start()) {
@@ -1585,30 +1810,7 @@ function disconnect() {
 }
 
 function toggleVoiceWake() {
-  if (!wakeListener.isSupported()) {
-    return;
-  }
-
-  voiceWakeEnabled = !voiceWakeEnabled;
-  updateVoiceWakeButton();
-
-  if (!voiceWakeEnabled) {
-    wakeListener.stop();
-
-    if (!voiceSession.hasConnection() && !hasAudioResources()) {
-      setStatus("", "Disconnected");
-    }
-
-    return;
-  }
-
-  if (voiceSession.hasConnection() || hasAudioResources()) {
-    return;
-  }
-
-  if (wakeListener.start()) {
-    setStatus("", VOICE_WAKE_STATUS);
-  }
+  setVoiceWakePreference(!voiceWakeEnabled);
 }
 
-bindControls(connect, disconnect, leaveStandby, toggleVoiceWake);
+bindControls(connect, disconnect, toggleListening, toggleVoiceWake);

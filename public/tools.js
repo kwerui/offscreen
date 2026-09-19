@@ -41,6 +41,40 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "enable_wake_phrase",
+
+    description:
+      "Enable the exact Wake Phrase preference only when the user explicitly says " +
+      "'enable wake phrase'. This changes the existing UI preference. While the " +
+      "session is connected, it must not start browser speech recognition.",
+
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
+    name: "disable_wake_phrase",
+
+    description:
+      "Disable the exact Wake Phrase preference only when the user explicitly says " +
+      "'disable wake phrase'. This changes the existing UI preference and stops " +
+      "disconnected wake listening.",
+
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+
+  {
+    type: "function",
+
     name: "cancel_current_work",
 
     description:
@@ -519,6 +553,10 @@ const BROWSER_TOOL_NAMES = new Set([
   "browser_type",
   "browser_confirm_action",
 ]);
+const WAKE_PREFERENCE_TOOL_NAMES = new Set([
+  "enable_wake_phrase",
+  "disable_wake_phrase",
+]);
 
 export function getVoiceTools(capabilities) {
   return VOICE_TOOLS.filter((tool) => {
@@ -536,6 +574,10 @@ export function getVoiceTools(capabilities) {
 
     if (BROWSER_TOOL_NAMES.has(tool.name)) {
       return capabilities.browserControl;
+    }
+
+    if (WAKE_PREFERENCE_TOOL_NAMES.has(tool.name)) {
+      return !capabilities.isHostedDemo;
     }
 
     return true;

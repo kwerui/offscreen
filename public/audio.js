@@ -4,8 +4,18 @@ let audioCtx = null;
 let micStream = null;
 let workletNode = null;
 let micSource = null;
+let microphoneCaptureActive = false;
 let playbackTime = 0;
 let scheduledSources = [];
+
+const MICROPHONE_CONSTRAINTS = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+  },
+};
 
 export function hasAudioResources() {
   return Boolean(audioCtx || micStream || workletNode || micSource);
@@ -36,14 +46,9 @@ export async function setUpAudio({
   }
 
   try {
-    capturedMicrophoneStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-    });
+    capturedMicrophoneStream = await navigator.mediaDevices.getUserMedia(
+      MICROPHONE_CONSTRAINTS
+    );
   } catch (err) {
     closeAudioContext(connectionAudioContext);
     throw createAudioError("microphone", err);
@@ -94,7 +99,7 @@ export async function setUpAudio({
   }
 
   processorNode.port.onmessage = (event) => {
-    if (isSessionActive()) {
+    if (isSessionActive() && microphoneCaptureActive) {
       onMicrophoneAudio(arrayBufferToBase64(event.data));
     }
   };
@@ -103,6 +108,7 @@ export async function setUpAudio({
   micStream = capturedMicrophoneStream;
   micSource = microphoneSource;
   workletNode = processorNode;
+  microphoneCaptureActive = false;
   playbackTime = connectionAudioContext.currentTime;
   scheduledSources = [];
 
@@ -110,9 +116,67 @@ export async function setUpAudio({
 }
 
 export function startMicrophoneCapture() {
-  if (micSource && workletNode) {
-    micSource.connect(workletNode);
+  if (!micSource || !workletNode || microphoneCaptureActive) {
+    return false;
   }
+
+  micSource.connect(workletNode);
+  microphoneCaptureActive = true;
+  return true;
+}
+
+export function pauseMicrophoneCapture() {
+  microphoneCaptureActive = false;
+  disconnectAudioNode(micSource);
+  stopMicrophoneTracks(micStream);
+  micStream = null;
+  micSource = null;
+}
+
+export async function prepareMicrophoneCapture({ isSessionActive }) {
+  if (!audioCtx || !workletNode) {
+    return false;
+  }
+
+  if (micSource && micStream) {
+    return true;
+  }
+
+  let capturedMicrophoneStream;
+  let microphoneSource;
+
+  try {
+    capturedMicrophoneStream = await navigator.mediaDevices.getUserMedia(
+      MICROPHONE_CONSTRAINTS
+    );
+  } catch (err) {
+    throw createAudioError("microphone", err);
+  }
+
+  if (!isSessionActive()) {
+    stopMicrophoneTracks(capturedMicrophoneStream);
+    return false;
+  }
+
+  try {
+    microphoneSource = audioCtx.createMediaStreamSource(
+      capturedMicrophoneStream
+    );
+  } catch (err) {
+    stopMicrophoneTracks(capturedMicrophoneStream);
+    throw createAudioError("nodes", err);
+  }
+
+  if (!isSessionActive()) {
+    disconnectAudioNode(microphoneSource);
+    stopMicrophoneTracks(capturedMicrophoneStream);
+    return false;
+  }
+
+  micStream = capturedMicrophoneStream;
+  micSource = microphoneSource;
+  microphoneCaptureActive = false;
+  return true;
 }
 
 export function playPCM(base64Audio, isSessionActive) {
@@ -157,6 +221,40 @@ export function playPCM(base64Audio, isSessionActive) {
   };
 }
 
+
+export function playListeningStateCue(state) {
+  if (!audioCtx || typeof audioCtx.createOscillator !== "function") {
+    return false;
+  }
+
+  const frequencies = state === "paused" ? [520, 360] : [360, 520];
+  const now = audioCtx.currentTime;
+
+  frequencies.forEach((frequency, index) => {
+    const oscillator = audioCtx.createOscillator();
+    const gain = audioCtx.createGain?.();
+    const startAt = now + index * 0.09;
+    const stopAt = startAt + 0.07;
+
+    oscillator.frequency.value = frequency;
+
+    if (gain) {
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+    } else {
+      oscillator.connect(audioCtx.destination);
+    }
+
+    oscillator.start(startAt);
+    oscillator.stop(stopAt);
+  });
+
+  return true;
+}
+
 export function flushPlayback() {
   for (const source of scheduledSources) {
     try {
@@ -183,6 +281,7 @@ export function tearDownAudio() {
   micStream = null;
   workletNode = null;
   micSource = null;
+  microphoneCaptureActive = false;
 
   disconnectAudioNode(processor);
   disconnectAudioNode(microphoneSource);

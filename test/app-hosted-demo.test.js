@@ -104,6 +104,8 @@ test("HOSTED_DEMO registers only hosted tools, uses a hosted prompt, and shows i
     };
 
     await import(`../public/app.js?hosted-demo-test=${Date.now()}`);
+    assert.equal(elements.get("voice-wake").textContent, "Wake Phrase unavailable");
+    assert.equal(elements.get("voice-wake").disabled, true);
     await elements.get("connect").listeners.click();
     const socket = FakeWebSocket.instances.at(-1);
     socket.open();

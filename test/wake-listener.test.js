@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWakeListener } from "../public/wake-listener.js";
+import { createPhraseListener, createWakeListener } from "../public/wake-listener.js";
 
 class FakeSpeechRecognition {
   static instances = [];
@@ -68,13 +68,42 @@ test("matches only the configured wake phrase and stops before waking", () => {
     assert.equal(wakeCalls, 0);
     assert.equal(recognition.stopCalls, 0);
 
-    recognition.receiveTranscript("Connect off-screen.");
+    recognition.receiveTranscript('“Connect off-screen!”');
     assert.equal(wakeCalls, 1);
     assert.equal(recognition.stopCalls, 1);
     assert.equal(wakeListener.isActive(), false);
 
     recognition.receiveTranscript("Connect Offscreen");
     assert.equal(wakeCalls, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+
+test("matches one of several bounded local phrases", () => {
+  const originalWindow = globalThis.window;
+  const matched = [];
+
+  try {
+    FakeSpeechRecognition.instances = [];
+    globalThis.window = { SpeechRecognition: FakeSpeechRecognition };
+
+    const listener = createPhraseListener({
+      phrases: ["resume listening", "disconnect", "hang up"],
+      onPhrase: (phrase) => matched.push(phrase),
+    });
+
+    assert.equal(listener.start(), true);
+    const recognition = FakeSpeechRecognition.instances.at(-1);
+
+    recognition.receiveTranscript("keep working");
+    assert.deepEqual(matched, []);
+
+    recognition.receiveTranscript("Resume listening!");
+    assert.deepEqual(matched, ["resume listening"]);
+    assert.equal(recognition.stopCalls, 1);
+    assert.equal(listener.isActive(), false);
   } finally {
     globalThis.window = originalWindow;
   }
