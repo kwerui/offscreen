@@ -268,7 +268,16 @@ Git, project-contained file paths, the configured project test command, or
 validated VS Code paths. Never turn speech into an arbitrary shell command.
 Use Codex for reasoning such as test-failure diagnosis, not for predictable
 actions such as Git status, bounded current Git diff inspection, or running
-known tests. Git diff inspection is LOCAL-only and fixed to the configured
+known tests. Git status, current Git diff, and recent commit history are
+distinct: status reports the working tree, `get_git_diff` reports current
+staged/unstaged content, and `get_git_history` lists only the five most recent
+commits. Commit diffs are LOCAL-only and can inspect only an opaque reference
+created by that latest history response; never accept a spoken hash, revspec,
+branch, tag, range, or Git flag. The fixed Git adapter uses `git log` for
+history and `git show` for one validated immutable commit, with bounded files
+and hunk excerpts. Root commits work; merge detail is deliberately unsupported.
+Opening a changed file opens its current working-tree version, not a historical
+snapshot. Current Git diff inspection is LOCAL-only and fixed to the configured
 project root: it supports only current staged/unstaged changes and an optional
 validated project-relative path, reports untracked paths without reading them,
 and never accepts revisions, arbitrary flags, shell input, or mutating Git

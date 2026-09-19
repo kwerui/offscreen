@@ -202,6 +202,16 @@ test("does not let a file-specific Git diff replace the broad changed-file list"
   }).arguments, { path: "b.js" });
 });
 
+test("binds commit-diff changed files to spoken current-file references", () => {
+  const context = createProjectReferenceContext();
+  context.registerResult("get_commit_diff", { success: true, presentation: { files: [
+    { position: 1, path: "public/app.js" }, { position: 2, path: "server.js" },
+  ] } });
+  context.markPendingSearchResultReady();
+  context.alignPendingSearchResult("The commit changed server.js and public/app.js.");
+  assert.deepEqual(context.resolve({ toolName: "open_project_file", arguments: { path: "second changed file" }, userText: "Open the second changed file." }).arguments, { path: "public/app.js" });
+});
+
 test("uses a prior safe search query, bounds storage, and clears on reset", () => {
   const context = createProjectReferenceContext();
   for (let index = 0; index < 25; index++) {

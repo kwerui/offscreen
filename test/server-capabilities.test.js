@@ -33,7 +33,9 @@ test("LOCAL registers every current backend capability route", () => {
     { path: "/api/calendar/query", methods: ["get"] },
     { path: "/api/capabilities.js", methods: ["get"] },
     { path: "/api/codex", methods: ["post"] },
+    { path: "/api/developer/commit-diff", methods: ["post"] },
     { path: "/api/developer/git-diff", methods: ["post"] },
+    { path: "/api/developer/git-history", methods: ["post"] },
     { path: "/api/developer/git-status", methods: ["post"] },
     { path: "/api/developer/open-file", methods: ["post"] },
     { path: "/api/developer/read-file", methods: ["post"] },
@@ -172,6 +174,38 @@ test("Git diff route uses only the configured project root and optional path", a
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(calls, [{ projectRoot: "/configured/project", path: "public/app.js" }]);
+});
+
+test("commit inspection accepts only an opaque reference issued by recent history", async () => {
+  const calls = [];
+  const app = createApp({
+    apiKey: "test-key", mode: "LOCAL", projectWorkspaceRoot: "/configured/project",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ token: "test-token" }) }),
+    gitHistoryImpl: async () => ({ success: true, commits: [{ id: "a".repeat(40), shortId: "aaaaaaa", subject: "Recent", author: "Ada", authoredAt: "date", parentCount: 1 }] }),
+    commitDiffImpl: async (options) => { calls.push(options); return { success: true, files: [] }; },
+  });
+  const routeFor = (path) => app._router.stack.find((layer) => layer.route?.path === path);
+  const response = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+  await routeFor("/api/developer/commit-diff").route.stack[0].handle({ body: { reference: "HEAD~99" } }, response);
+  assert.deepEqual(response.body, { success: false, error: "commit_unavailable", terminal: true });
+  await routeFor("/api/developer/git-history").route.stack[0].handle({ body: { count: 999, command: "git log --all" } }, response);
+  assert.equal(response.body.commits[0].id, "a".repeat(40));
+  const reference = response.body.commits[0].reference;
+  await routeFor("/api/developer/commit-diff").route.stack[0].handle({ body: { reference, revision: "HEAD~999", hash: "b".repeat(40) } }, response);
+  assert.deepEqual(calls, [{ projectRoot: "/configured/project", commit: { id: "a".repeat(40), shortId: "aaaaaaa", subject: "Recent", author: "Ada", authoredAt: "date", parentCount: 1 } }]);
+});
+
+test("recent-history route serializes each bounded commit rather than only the latest", async () => {
+  const app = createApp({
+    apiKey: "test-key", mode: "LOCAL", projectWorkspaceRoot: "/configured/project",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ token: "test-token" }) }),
+    gitHistoryImpl: async () => ({ success: true, commits: [1, 2, 3].map((position) => ({ id: String(position).repeat(40), shortId: String(position), subject: `Commit ${position}`, author: "Ada", authoredAt: "date", parentCount: 1, position })) }),
+  });
+  const route = app._router.stack.find((layer) => layer.route?.path === "/api/developer/git-history");
+  const response = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+  await route.route.stack[0].handle({ body: {} }, response);
+  assert.deepEqual(response.body.commits.map((commit) => commit.subject), ["Commit 1", "Commit 2", "Commit 3"]);
+  assert.equal(response.body.commits.every((commit) => typeof commit.reference === "string"), true);
 });
 
 test("project workspace routes use only the configured project root and bounded request fields", async () => {

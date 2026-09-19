@@ -33,6 +33,7 @@ import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { getGitStatus } from "./git-status-tool.js";
 import { getGitDiff } from "./git-diff-tool.js";
+import { getCommitDiff, getGitHistory } from "./git-history-tool.js";
 import {
   openProjectFile,
   readProjectFile,
@@ -40,6 +41,7 @@ import {
 } from "./project-workspace-tool.js";
 import { runProjectTests } from "./project-tests-tool.js";
 import { createProjectReferenceContext } from "./project-reference-context.js";
+import { createCommitReferenceContext } from "./commit-reference-context.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import {
@@ -94,8 +96,12 @@ const gitDiffTerminalResults = new Map();
 const projectReferenceContext = capabilities.developerWorkspace
   ? createProjectReferenceContext()
   : null;
+const commitReferenceContext = capabilities.developerWorkspace
+  ? createCommitReferenceContext()
+  : null;
 
 let pendingProjectReferenceResultCallId = null;
+let pendingCommitReferenceResultCallId = null;
 let pendingBrowserConfirmation = null;
 
 const EXPLICIT_CONFIRMATION_RESPONSES = new Set([
@@ -295,6 +301,18 @@ function registerProjectReferenceResult(toolName, result, sessionId, toolTurnId)
   if (isActiveToolTurn(sessionId, toolTurnId)) {
     projectReferenceContext?.registerResult(toolName, result);
   }
+}
+
+function createGitHistoryResultForAgent(result) {
+  if (!result?.success) return result;
+  const commits = result.commits.map(({ id, reference, parentCount, ...commit }) => commit);
+  return {
+    ...result,
+    commits,
+    // Keep the default voice list useful for immediate ordinal follow-ups.
+    // The commit context still makes only titles actually spoken eligible.
+    presentation: { commits: commits.slice(0, 3) },
+  };
 }
 
 function createSearchProjectResultForAgent(result) {
@@ -749,6 +767,10 @@ const toolResultCoordinator = createToolResultCoordinator({
         projectReferenceContext?.markPendingSearchResultReady();
         pendingProjectReferenceResultCallId = null;
       }
+      if (callId === pendingCommitReferenceResultCallId) {
+        commitReferenceContext?.markPendingHistoryReady();
+        pendingCommitReferenceResultCallId = null;
+      }
 
       codexCallTracker.resolveCall(callId);
       projectTestCallTracker.resolveCall(callId);
@@ -765,7 +787,9 @@ function invalidateToolTurn(updateActivityPrompt = true) {
   activeToolTurnId++;
   pendingDisconnect = null;
   pendingProjectReferenceResultCallId = null;
+  pendingCommitReferenceResultCallId = null;
   projectReferenceContext?.discardPendingSearchResult();
+  commitReferenceContext?.discardPendingHistory();
   toolResultCoordinator.reset();
   clearToolStatus();
   clearActivities(updateActivityPrompt);
@@ -1156,6 +1180,7 @@ function handleEvent(event, sessionId) {
       } else {
         if (pendingAgentResponse?.trim()) {
           projectReferenceContext?.alignPendingSearchResult(pendingAgentResponse);
+          commitReferenceContext?.alignPendingHistory(pendingAgentResponse);
           lastCompletedAgentResponse = pendingAgentResponse;
         }
 
@@ -1655,6 +1680,40 @@ async function handleToolCall(event, sessionId, toolTurnId) {
     return;
   }
 
+  if (event.name === "get_git_history") {
+    startActivity(sessionId, toolTurnId, event.call_id, "Checking recent project Git history.");
+    try {
+      const result = await getGitHistory();
+      if (result?.success && isActiveToolTurn(sessionId, toolTurnId)) {
+        commitReferenceContext?.registerHistory(result);
+        pendingCommitReferenceResultCallId = event.call_id;
+      }
+      toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, createGitHistoryResultForAgent(result));
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+    return;
+  }
+
+  if (event.name === "get_commit_diff") {
+    const resolvedCommit = commitReferenceContext?.resolve(event.arguments, latestCompletedUserTurn?.text)
+      ?? { success: false, error: "I need a recent commit list before I can inspect a commit." };
+    if (!resolvedCommit.success) {
+      toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, { success: false, error: resolvedCommit.error, terminal: true });
+      return;
+    }
+    startActivity(sessionId, toolTurnId, event.call_id, "Inspecting a recent project commit.");
+    try {
+      const result = await getCommitDiff(resolvedCommit.reference);
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
+      if (result?.success && isActiveToolTurn(sessionId, toolTurnId)) pendingProjectReferenceResultCallId = event.call_id;
+      toolResultCoordinator.queueResult(sessionId, toolTurnId, event.call_id, result);
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+    return;
+  }
+
   if (event.name === "get_git_diff") {
     const attemptKey = getGitDiffAttemptKey(resolvedProjectCall.arguments.path);
     const terminalResult = gitDiffTerminalResults.get(attemptKey);
@@ -1854,6 +1913,7 @@ function teardown(
   codexCallTracker.clear();
   projectTestCallTracker.clear();
   projectReferenceContext?.clear();
+  commitReferenceContext?.clear();
   pendingProjectReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;

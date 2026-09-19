@@ -55,6 +55,13 @@ Codex CLI to inspect the current project.
 - Local Codex project inspection through the Codex CLI in a read-only sandbox.
   It returns concise repository and code analysis; it does not modify the
   project.
+- LOCAL-only developer Git inspection distinguishes current working-tree status,
+  bounded staged/unstaged diffs, and the five most recent commits. Commit
+  inspection accepts only an opaque reference established by that recent list;
+  it does not accept hashes, revisions, branches, tags, or ranges. Commit diffs
+  are bounded to eight safe files and small hunk excerpts; merge-commit detail
+  is intentionally unsupported. A changed-file follow-up opens the current
+  working-tree file in VS Code, never a historical snapshot.
 - Calendar uses the Voice Agent tool setting `execution_mode: "hold"`; Codex
   inspection uses `execution_mode: "interactive"`.
 - Voice session and tool results are isolated with `sessionId` and

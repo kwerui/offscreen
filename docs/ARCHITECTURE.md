@@ -141,6 +141,20 @@ contents, limits files/hunks/lines/characters, marks truncation, and normalizes
 Git failures without returning process output. This is read-only: it cannot
 stage, commit, push, checkout, reset, restore, or alter Git state.
 
+`git-history.js` owns deterministic, LOCAL-only recent history and commit-diff
+inspection. It runs only fixed `git log -n 5 --format=...` and fixed `git show`
+commands with `shell: false`, a configured repository cwd, a five-second
+timeout, and bounded buffers. History returns at most five commits (the adapter
+hard maximum is ten); an opaque server-issued reference maps to the exact full
+immutable commit ID. The browser keeps that reference in a dedicated spoken
+commit context and removes IDs/references from model-facing history results.
+Commit detail is possible only through that opaque reference, never a supplied
+hash or revspec. It reports at most eight safe project-relative files with the
+existing small bounded hunk format. Root commits are supported by `git show`;
+merge commits return a normalized unsupported result to avoid ambiguous diffs.
+Changed-file references join the normal project-file context and open only the
+current working-tree version.
+
 For broad diff results, `git-diff.js` also provides a small ordered
 `presentation.files` sequence. `project-reference-context.js` registers only
 that sequence and then uses its existing agent-transcript path capture to keep

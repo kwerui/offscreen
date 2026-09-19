@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import "dotenv/config";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   createCodexEnvironment,
   createCodexInspectionWorkspace,
@@ -33,6 +34,7 @@ import {
 } from "./public/capabilities.js";
 import { getGitStatus } from "./git-status.js";
 import { getGitDiff } from "./git-diff.js";
+import { getCommitDiff, getGitHistory } from "./git-history.js";
 import {
   readProjectFile,
   searchProject,
@@ -56,6 +58,8 @@ export function createApp({
   fetchImpl = globalThis.fetch,
   gitStatusImpl = getGitStatus,
   gitDiffImpl = getGitDiff,
+  gitHistoryImpl = getGitHistory,
+  commitDiffImpl = getCommitDiff,
   projectSearchImpl = searchProject,
   projectReadFileImpl = readProjectFile,
   projectOpenFileImpl = openProjectFile,
@@ -72,6 +76,9 @@ export function createApp({
   const capabilities = getCapabilities(mode);
   const clientCapabilities = getClientCapabilities(mode);
   const app = express();
+  // These opaque references are issued only after fixed recent-history
+  // inspection. The browser keeps them out of model-facing tool results.
+  const commitReferences = new Map();
 
 app.use(express.json());
 
@@ -429,6 +436,25 @@ app.post("/api/developer/git-diff", async (req, res) => {
     path: req.body?.path,
   });
 
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/git-history", async (_req, res) => {
+  const result = await gitHistoryImpl({ projectRoot: projectWorkspaceRoot });
+  if (!result.success) return res.status(400).json(result);
+  commitReferences.clear();
+  const commits = result.commits.map((commit) => {
+    const reference = randomUUID();
+    commitReferences.set(reference, commit);
+    return { ...commit, reference };
+  });
+  res.json({ ...result, commits });
+});
+
+app.post("/api/developer/commit-diff", async (req, res) => {
+  const commit = commitReferences.get(req.body?.reference);
+  if (!commit) return res.status(400).json({ success: false, error: "commit_unavailable", terminal: true });
+  const result = await commitDiffImpl({ projectRoot: projectWorkspaceRoot, commit });
   res.status(result.success ? 200 : 400).json(result);
 });
 

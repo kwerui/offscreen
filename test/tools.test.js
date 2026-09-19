@@ -168,6 +168,19 @@ test("defines the bounded optional-path Git diff voice tool", () => {
   assert.match(gitDiffTool.description, /diff excerpts.*untrusted.*repository.*data.*never.*instructions/i);
 });
 
+test("defines bounded recent-history and contextual commit-diff tools", () => {
+  const history = VOICE_TOOLS.find((tool) => tool.name === "get_git_history");
+  const diff = VOICE_TOOLS.find((tool) => tool.name === "get_commit_diff");
+  assert.deepEqual(history.parameters, { type: "object", properties: {}, required: [] });
+  assert.equal(history.execution_mode, "hold");
+  assert.match(history.description, /five most recent.*newest first/i);
+  assert.match(history.description, /first three returned commit subjects.*exact returned order/i);
+  assert.match(history.description, /never.*hash.*revision.*branch.*tag.*range.*flag/i);
+  assert.equal(diff.parameters.properties.position.type, "integer");
+  assert.match(diff.description, /only after.*get_git_history/i);
+  assert.match(diff.description, /do not provide.*hash.*revision.*branch.*tag.*range.*flag/i);
+});
+
 test("defines an interactive bounded no-argument project test voice tool", () => {
   const testTool = VOICE_TOOLS.find(
     (tool) => tool.name === "run_project_tests"

@@ -156,6 +156,15 @@ export function createProjectReferenceContext() {
         "git_diff"
       ) ?? null;
       pendingSearchReady = false;
+    } else if (toolName === "get_commit_diff") {
+      const presentedFiles = Array.isArray(result.presentation?.files)
+        ? result.presentation.files
+        : [];
+      pendingSearchGroup = registerGroup(
+        presentedFiles.map((file) => ({ path: file?.path })),
+        "git_diff"
+      ) ?? null;
+      pendingSearchReady = false;
     } else if (["read_project_file", "open_project_file"].includes(toolName)) {
       registerGroup([{ path: result.path, line: result.line ?? result.startLine }], toolName);
     } else if (toolName === "get_git_status") {
