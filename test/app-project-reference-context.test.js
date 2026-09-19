@@ -49,7 +49,8 @@ test("binds contextual ordinals to spoken search paths and keeps the list after 
     globalThis.__OFFSCREEN_CAPABILITIES__ = { isHostedDemo: false, calendar: true, codex: true, developerWorkspace: true, browserControl: true };
     globalThis.fetch = async (url, options) => {
       if (url === "/api/voice-token") return { ok: true, json: async () => ({ token: "test-token" }) };
-      requests.push({ url, body: JSON.parse(options.body) });
+      const body = options?.body ? JSON.parse(options.body) : undefined;
+      requests.push({ url, body });
       if (url === "/api/developer/search") return { ok: true, json: async () => ({
         success: true,
         query: "run project tests",
@@ -73,9 +74,30 @@ test("binds contextual ordinals to spoken search paths and keeps the list after 
       }) };
       if (url === "/api/developer/open-file") return { ok: true, json: async () => ({
         success: true,
-        path: JSON.parse(options.body).path,
-        ...(JSON.parse(options.body).line === undefined ? {} : { line: JSON.parse(options.body).line }),
+        path: body.path,
+        ...(body.line === undefined ? {} : { line: body.line }),
       }) };
+      if (url === "/api/developer/git-diff") {
+        if (body?.path === ".env") {
+          return { ok: false, json: async () => ({ success: false, error: "path_denied", terminal: true }) };
+        }
+
+        return { ok: true, json: async () => ({
+          success: true,
+          files: [
+            { path: "public/app.js", unstaged: { hunks: [] } },
+            { path: "public/tools.js", unstaged: { hunks: [] } },
+            { path: "server.js", unstaged: { hunks: [] } },
+            { path: "test/git-diff.test.js", unstaged: { hunks: [] } },
+          ],
+          presentation: { files: [
+            { position: 1, path: "public/app.js" },
+            { position: 2, path: "public/tools.js" },
+            { position: 3, path: "server.js" },
+          ], truncated: true },
+          truncated: true,
+        }) };
+      }
       throw new Error(`Unexpected request: ${url}`);
     };
 
@@ -142,6 +164,43 @@ test("binds contextual ordinals to spoken search paths and keeps the list after 
       { url: "/api/developer/open-file", body: { path: "public/app.js", line: 120 } },
       { url: "/api/developer/open-file", body: { path: "public/tools.js" } },
     ]);
+
+    socket.receive({ type: "transcript.user", text: "What changed?" });
+    socket.receive({ type: "reply.started" });
+    socket.receive({ type: "tool.call", name: "get_git_diff", call_id: "broad-diff", arguments: {} });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+    completeAgentReply(socket, "The first changed files are public/app.js, public/tools.js, and server.js.");
+
+    socket.receive({ type: "transcript.user", text: "Open the second changed file." });
+    socket.receive({ type: "tool.call", name: "open_project_file", call_id: "second-changed", arguments: { path: "second changed file" } });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    socket.receive({ type: "transcript.user", text: "Open the fourth changed file." });
+    socket.receive({ type: "tool.call", name: "open_project_file", call_id: "hidden-changed", arguments: { path: "fourth changed file" } });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    socket.receive({ type: "transcript.user", text: "What changed in .env?" });
+    socket.receive({ type: "tool.call", name: "get_git_diff", call_id: "denied-diff", arguments: { path: ".env" } });
+    socket.receive({ type: "tool.call", name: "get_git_diff", call_id: "denied-diff-retry", arguments: { path: ".env" } });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    assert.deepEqual(requests.slice(-3), [
+      { url: "/api/developer/git-diff", body: undefined },
+      { url: "/api/developer/open-file", body: { path: "public/tools.js" } },
+      { url: "/api/developer/git-diff", body: { path: ".env" } },
+    ]);
+    const deniedResult = socket.sentMessages.find((message) => (
+      message.type === "tool.result" && message.call_id === "denied-diff"
+    ));
+    assert.deepEqual(JSON.parse(deniedResult.result), {
+      success: false,
+      error: "path_denied",
+      terminal: true,
+    });
   } finally {
     globalThis.fetch = originals.fetch; globalThis.WebSocket = originals.WebSocket;
     globalThis.document = originals.document; globalThis.window = originals.window;

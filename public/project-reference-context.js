@@ -3,13 +3,13 @@ const MAX_PATH_CHARACTERS = 512;
 const MAX_LABEL_CHARACTERS = 240;
 const MAX_LINE_NUMBER = 100_000;
 
-const CONTEXTUAL_PATH_PATTERN = /\b(?:that file|this file|that one|the one|it|the file with that failure|the file you just mentioned|(?:first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+(?:one|result|file))\b/i;
+const CONTEXTUAL_PATH_PATTERN = /\b(?:that file|this file|that one|the one|it|the file with that failure|the file you just mentioned|(?:first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+(?:(?:changed|modified)\s+)?(?:one|result|file))\b/i;
 const CONTEXTUAL_SEARCH_PATTERN = /\b(?:that function|that text|that query|it)\b/i;
-const INDEXED_REFERENCE_PATTERN = /\b(?:the )?(first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+(?:one|result|file)\b/i;
+const INDEXED_REFERENCE_PATTERN = /\b(?:the )?(first|second|third|fourth|fifth|\d+(?:st|nd|rd|th)?)\s+(?:(?:changed|modified)\s+)?(?:one|result|file)\b/i;
 const INDEXES = new Map([
   ["first", 0], ["second", 1], ["third", 2], ["fourth", 3], ["fifth", 4],
 ]);
-const ORDINAL_GROUP_SOURCES = new Set(["search", "git_status", "test_failure"]);
+const ORDINAL_GROUP_SOURCES = new Set(["search", "git_diff", "git_status", "test_failure"]);
 
 function isSafeProjectPath(path) {
   if (typeof path !== "string" || path.length === 0 || path.length > MAX_PATH_CHARACTERS) {
@@ -147,6 +147,15 @@ export function createProjectReferenceContext() {
         typeof result.query === "string" ? result.query.slice(0, 200) : undefined
       ) ?? null;
       pendingSearchReady = false;
+    } else if (toolName === "get_git_diff") {
+      const presentedFiles = Array.isArray(result.presentation?.files)
+        ? result.presentation.files
+        : [];
+      pendingSearchGroup = registerGroup(
+        presentedFiles.map((file) => ({ path: file?.path })),
+        "git_diff"
+      ) ?? null;
+      pendingSearchReady = false;
     } else if (["read_project_file", "open_project_file"].includes(toolName)) {
       registerGroup([{ path: result.path, line: result.line ?? result.startLine }], toolName);
     } else if (toolName === "get_git_status") {
@@ -215,7 +224,7 @@ export function createProjectReferenceContext() {
         : { success: false, error: "I need the function or text to search for." };
     }
 
-    if (!["read_project_file", "open_project_file"].includes(toolName)) {
+    if (!["read_project_file", "open_project_file", "get_git_diff"].includes(toolName)) {
       return { success: true, arguments: suppliedArguments };
     }
 

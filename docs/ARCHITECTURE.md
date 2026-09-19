@@ -129,6 +129,26 @@ the fixed `git status --porcelain=v1 --branch -z` command in the configured
 project root, parses its machine-readable output into branch and safe file
 status entries, and normalizes failures without returning process output.
 
+`git-diff.js` owns deterministic, LOCAL-only Git content inspection. It first
+uses fixed `git status --porcelain=v1 --branch -z`, then only fixed
+`git diff --no-ext-diff --no-color --no-renames --unified=3` invocations with an
+optional validated project-relative path after `--`. It never accepts a Git
+subcommand, flag, revision, executable, working directory, or shell input. It
+uses the shared project-path policy, rejects denied paths and unsafe current
+files/symlinks, and never exposes absolute paths. It separates staged and
+unstaged tracked changes, reports untracked files without reading their
+contents, limits files/hunks/lines/characters, marks truncation, and normalizes
+Git failures without returning process output. This is read-only: it cannot
+stage, commit, push, checkout, reset, restore, or alter Git state.
+
+For broad diff results, `git-diff.js` also provides a small ordered
+`presentation.files` sequence. `project-reference-context.js` registers only
+that sequence and then uses its existing agent-transcript path capture to keep
+only paths actually spoken to the user, in spoken order. File-specific diffs do
+not replace that broad list. Terminal safe errors distinguish protected paths
+(`path_denied`), invalid/unavailable paths, and validated files with no current
+changes; browser transport preserves only these normalized terminal results.
+
 `project-workspace.js` owns deterministic local project search and source-file
 reading. It walks only the configured project root with Node filesystem APIs,
 uses literal text matching, rejects paths that are not repository-relative, and
@@ -152,6 +172,11 @@ root from the browser.
 
 `git-status-tool.js` owns browser-side Git status HTTP execution. It sends no
 command, path, or arguments, and returns the server's structured status result.
+
+`git-diff-tool.js` owns browser-side Git diff HTTP execution. It sends only the
+optional project-relative path to its fixed local endpoint and normalizes
+transport failures; `app.js` retains session/turn checks, activity reporting,
+and shared reference registration.
 
 `browser-tool.js` owns browser-side HTTP execution for the bounded browser
 actions and confirmation control requests. It calls the local browser endpoint
@@ -244,6 +269,8 @@ Microphone
             → read-only local Codex CLI
        → get_git_status: browser calls local Git status API
             → fixed read-only Git status adapter in the configured project root
+       → get_git_diff: browser calls local Git diff API
+            → fixed bounded read-only Git diff adapter in the configured project root
        → search_project/read_project_file: browser calls local project workspace APIs
             → bounded Node filesystem search/read adapter in the configured project root
        → open_project_file: browser calls the local project file-opening API

@@ -160,6 +160,48 @@ test("registers Git and test-failure locations while rejecting unsafe paths", ()
   assert.deepEqual(context.resolve({ toolName: "open_project_file", arguments: { path: "the file with that failure" }, userText: "Open the file with that failure." }).arguments, { path: "test/app.test.js", line: 12 });
 });
 
+test("binds Git diff ordinals to the changed files actually spoken", () => {
+  const context = createProjectReferenceContext();
+  context.registerResult("get_git_diff", { success: true, files: [
+    { path: "public/app.js", unstaged: { hunks: [] } },
+    { path: "server.js", staged: { hunks: [] } },
+    { path: ".env", unstaged: { hunks: [] } },
+  ], presentation: { files: [
+    { position: 1, path: "public/app.js" },
+    { position: 2, path: "server.js" },
+  ] } });
+  context.markPendingSearchResultReady();
+  context.alignPendingSearchResult("You changed server.js, then public/app.js.");
+
+  assert.deepEqual(context.resolve({
+    toolName: "open_project_file",
+    arguments: { path: "second changed file" },
+    userText: "Open the second changed file.",
+  }).arguments, { path: "public/app.js" });
+  assert.deepEqual(context.resolve({
+    toolName: "get_git_diff",
+    arguments: { path: "first one" },
+    userText: "What changed in the first one?",
+  }).arguments, { path: "server.js" });
+});
+
+test("does not let a file-specific Git diff replace the broad changed-file list", () => {
+  const context = createProjectReferenceContext();
+  context.registerResult("get_git_diff", { success: true, presentation: { files: [
+    { position: 1, path: "a.js" },
+    { position: 2, path: "b.js" },
+  ] } });
+  context.markPendingSearchResultReady();
+  context.alignPendingSearchResult("The changed files are a.js and b.js.");
+
+  context.registerResult("get_git_diff", { success: true, files: [{ path: "a.js" }] });
+  assert.deepEqual(context.resolve({
+    toolName: "open_project_file",
+    arguments: { path: "second changed file" },
+    userText: "Open the second changed file.",
+  }).arguments, { path: "b.js" });
+});
+
 test("uses a prior safe search query, bounds storage, and clears on reset", () => {
   const context = createProjectReferenceContext();
   for (let index = 0; index < 25; index++) {

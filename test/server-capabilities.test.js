@@ -33,6 +33,7 @@ test("LOCAL registers every current backend capability route", () => {
     { path: "/api/calendar/query", methods: ["get"] },
     { path: "/api/capabilities.js", methods: ["get"] },
     { path: "/api/codex", methods: ["post"] },
+    { path: "/api/developer/git-diff", methods: ["post"] },
     { path: "/api/developer/git-status", methods: ["post"] },
     { path: "/api/developer/open-file", methods: ["post"] },
     { path: "/api/developer/read-file", methods: ["post"] },
@@ -148,6 +149,29 @@ test("Git status route uses only the configured project root and ignores request
   assert.equal(response.statusCode, 200);
   assert.equal(calls.length, 1);
   assert.match(calls[0].projectRoot, /offscreen$/);
+});
+
+test("Git diff route uses only the configured project root and optional path", async () => {
+  const calls = [];
+  const app = createApp({
+    apiKey: "test-key",
+    mode: "LOCAL",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ token: "test-token" }) }),
+    projectWorkspaceRoot: "/configured/project",
+    gitDiffImpl: async (options) => {
+      calls.push(options);
+      return { success: true, files: [], truncated: false };
+    },
+  });
+  const route = app._router.stack.find((layer) => layer.route?.path === "/api/developer/git-diff");
+  const response = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+
+  await route.route.stack[0].handle({
+    body: { path: "public/app.js", command: "git reset --hard", cwd: "/outside", revision: "HEAD~1" },
+  }, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(calls, [{ projectRoot: "/configured/project", path: "public/app.js" }]);
 });
 
 test("project workspace routes use only the configured project root and bounded request fields", async () => {

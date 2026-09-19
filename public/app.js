@@ -32,6 +32,7 @@ import { getVoiceTools } from "./tools.js";
 import { openWebsite } from "./website-tool.js";
 import { getCalendarEvents } from "./calendar-tool.js";
 import { getGitStatus } from "./git-status-tool.js";
+import { getGitDiff } from "./git-diff-tool.js";
 import {
   openProjectFile,
   readProjectFile,
@@ -87,12 +88,14 @@ let completedUserTurnId = 0;
 let latestCompletedUserTurn = null;
 
 const projectFileOpenAttempts = new Set();
+const gitDiffInFlightPaths = new Set();
+const gitDiffTerminalResults = new Map();
 
 const projectReferenceContext = capabilities.developerWorkspace
   ? createProjectReferenceContext()
   : null;
 
-let pendingSearchResultCallId = null;
+let pendingProjectReferenceResultCallId = null;
 let pendingBrowserConfirmation = null;
 
 const EXPLICIT_CONFIRMATION_RESPONSES = new Set([
@@ -269,6 +272,8 @@ function recordCompletedUserTurn(text) {
   completedUserTurnId++;
   latestCompletedUserTurn = { id: completedUserTurnId, text };
   projectFileOpenAttempts.clear();
+  gitDiffInFlightPaths.clear();
+  gitDiffTerminalResults.clear();
 }
 
 function getProjectFileOpenAttemptKey(path, line) {
@@ -276,6 +281,13 @@ function getProjectFileOpenAttemptKey(path, line) {
     userTurnId: latestCompletedUserTurn?.id ?? 0,
     path: path ?? null,
     line: line ?? null,
+  });
+}
+
+function getGitDiffAttemptKey(path) {
+  return JSON.stringify({
+    userTurnId: latestCompletedUserTurn?.id ?? 0,
+    path: path ?? null,
   });
 }
 
@@ -733,9 +745,9 @@ const toolResultCoordinator = createToolResultCoordinator({
     );
 
     if (wasSent) {
-      if (callId === pendingSearchResultCallId) {
+      if (callId === pendingProjectReferenceResultCallId) {
         projectReferenceContext?.markPendingSearchResultReady();
-        pendingSearchResultCallId = null;
+        pendingProjectReferenceResultCallId = null;
       }
 
       codexCallTracker.resolveCall(callId);
@@ -752,7 +764,7 @@ const toolResultCoordinator = createToolResultCoordinator({
 function invalidateToolTurn(updateActivityPrompt = true) {
   activeToolTurnId++;
   pendingDisconnect = null;
-  pendingSearchResultCallId = null;
+  pendingProjectReferenceResultCallId = null;
   projectReferenceContext?.discardPendingSearchResult();
   toolResultCoordinator.reset();
   clearToolStatus();
@@ -1495,6 +1507,7 @@ async function handleToolCall(event, sessionId, toolTurnId) {
     "search_project",
     "read_project_file",
     "open_project_file",
+    "get_git_diff",
   ]);
   const resolvedProjectCall = projectToolNames.has(event.name)
     ? resolveProjectToolArguments(event)
@@ -1523,7 +1536,7 @@ async function handleToolCall(event, sessionId, toolTurnId) {
       registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
 
       if (result?.success && isActiveToolTurn(sessionId, toolTurnId)) {
-        pendingSearchResultCallId = event.call_id;
+        pendingProjectReferenceResultCallId = event.call_id;
       }
 
       toolResultCoordinator.queueResult(
@@ -1636,6 +1649,68 @@ async function handleToolCall(event, sessionId, toolTurnId) {
         result
       );
     } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
+
+  if (event.name === "get_git_diff") {
+    const attemptKey = getGitDiffAttemptKey(resolvedProjectCall.arguments.path);
+    const terminalResult = gitDiffTerminalResults.get(attemptKey);
+
+    if (terminalResult) {
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        terminalResult
+      );
+      return;
+    }
+
+    if (gitDiffInFlightPaths.has(attemptKey)) {
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        {
+          success: false,
+          error: "This project Git diff request is already being handled.",
+          terminal: true,
+        }
+      );
+      return;
+    }
+
+    gitDiffInFlightPaths.add(attemptKey);
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Inspecting the project Git diff."
+    );
+
+    try {
+      const result = await getGitDiff(resolvedProjectCall.arguments.path);
+
+      if (result?.terminal) {
+        gitDiffTerminalResults.set(attemptKey, result);
+      }
+      registerProjectReferenceResult(event.name, result, sessionId, toolTurnId);
+
+      if (result?.success && isActiveToolTurn(sessionId, toolTurnId)) {
+        pendingProjectReferenceResultCallId = event.call_id;
+      }
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      gitDiffInFlightPaths.delete(attemptKey);
       finishActivity(sessionId, toolTurnId, event.call_id);
     }
 
@@ -1779,7 +1854,7 @@ function teardown(
   codexCallTracker.clear();
   projectTestCallTracker.clear();
   projectReferenceContext?.clear();
-  pendingSearchResultCallId = null;
+  pendingProjectReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
   standbyResumePending = false;

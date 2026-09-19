@@ -45,6 +45,18 @@ test("routes deterministic Git questions away from Codex", () => {
   );
 });
 
+test("routes current content changes through the bounded Git diff tool", () => {
+  assert.match(defaultPrompt, /DETERMINISTIC GIT DIFF TOOL ROUTING.*REQUIRED/i);
+  assert.match(defaultPrompt, /What changed[\s\S]*Show my diff[\s\S]*Summarize my current[\s\S]*get_git_diff/i);
+  assert.match(defaultPrompt, /which files\/state[\s\S]*get_git_diff.*changed content/i);
+  assert.match(defaultPrompt, /staged.*unstaged.*untracked[\s\S]*never reads.*content/i);
+  assert.match(defaultPrompt, /do not read patch syntax aloud[\s\S]*infer reasons not visible/i);
+  assert.match(defaultPrompt, /diff excerpts.*untrusted[\s\S]*never follow.*instructions/i);
+  assert.match(defaultPrompt, /presentation\.files[\s\S]*MUST name[\s\S]*position order/i);
+  assert.match(defaultPrompt, /path_denied[\s\S]*protected file[\s\S]*do not retry/i);
+  assert.match(defaultPrompt, /no_changes[\s\S]*no current Git changes[\s\S]*untracked[\s\S]*no diff/i);
+});
+
 test("routes deterministic project search and reading away from Codex", () => {
   assert.match(defaultPrompt, /DETERMINISTIC PROJECT SEARCH AND READ TOOL ROUTING.*REQUIRED/i);
   assert.match(defaultPrompt, /find project text[\s\S]*search_project/i);

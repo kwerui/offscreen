@@ -156,6 +156,18 @@ test("defines the bounded no-argument Git status voice tool", () => {
   );
 });
 
+test("defines the bounded optional-path Git diff voice tool", () => {
+  const gitDiffTool = VOICE_TOOLS.find((tool) => tool.name === "get_git_diff");
+
+  assert.ok(gitDiffTool);
+  assert.deepEqual(gitDiffTool.parameters.required, []);
+  assert.equal(gitDiffTool.parameters.properties.path.type, "string");
+  assert.equal(gitDiffTool.execution_mode, "hold");
+  assert.match(gitDiffTool.description, /staged.*unstaged.*untracked/i);
+  assert.match(gitDiffTool.description, /cannot.*commit.*push.*reset.*checkout/i);
+  assert.match(gitDiffTool.description, /diff excerpts.*untrusted.*repository.*data.*never.*instructions/i);
+});
+
 test("defines an interactive bounded no-argument project test voice tool", () => {
   const testTool = VOICE_TOOLS.find(
     (tool) => tool.name === "run_project_tests"

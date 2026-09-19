@@ -32,6 +32,7 @@ import {
   getClientCapabilities,
 } from "./public/capabilities.js";
 import { getGitStatus } from "./git-status.js";
+import { getGitDiff } from "./git-diff.js";
 import {
   readProjectFile,
   searchProject,
@@ -54,6 +55,7 @@ export function createApp({
   mode = process.env.OFFSCREEN_MODE,
   fetchImpl = globalThis.fetch,
   gitStatusImpl = getGitStatus,
+  gitDiffImpl = getGitDiff,
   projectSearchImpl = searchProject,
   projectReadFileImpl = readProjectFile,
   projectOpenFileImpl = openProjectFile,
@@ -419,6 +421,15 @@ app.post("/api/developer/git-status", async (_req, res) => {
   const result = await gitStatusImpl({ projectRoot: __dirname });
 
   res.status(result.success ? 200 : 500).json(result);
+});
+
+app.post("/api/developer/git-diff", async (req, res) => {
+  const result = await gitDiffImpl({
+    projectRoot: projectWorkspaceRoot,
+    path: req.body?.path,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
 });
 
 app.post("/api/developer/search", async (req, res) => {
