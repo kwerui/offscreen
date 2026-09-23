@@ -1,6 +1,22 @@
 export const VOICE_TOOLS = [
   {
     type: "function",
+    name: "get_session_activity",
+    description:
+      "Report only the bounded, session-local record of completed Offscreen actions. Use for what Offscreen just did, the last action, actions so far, which actions failed, whether the last action succeeded, or whether a recent test run passed. Do not use for current Git status, current changes, or rerunning tests; use their dedicated tools for those requests. Keep the answer concise and grounded in the returned receipts.",
+    parameters: {
+      type: "object",
+      properties: {
+        filter: { type: "string", enum: ["all", "failed"], description: "Use failed only for failed, cancelled, or timed-out actions." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of recent actions, from 1 to 10." },
+      },
+      required: [],
+    },
+    execution_mode: "hold",
+    timeout_seconds: 5,
+  },
+  {
+    type: "function",
 
     name: "get_git_history",
 

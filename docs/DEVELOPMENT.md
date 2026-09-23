@@ -103,7 +103,7 @@ npm test
 The project uses Node's built-in test runner; no test framework dependency was
 added. The suite covers Calendar parsing and tool execution plus voice session,
 wake, standby, disconnect, repeat/summarize, current-activity, Codex-call, and
-tool-result lifecycle behavior. It does not contact AssemblyAI, Google Calendar,
+tool-result and session-activity receipt lifecycle behavior. It does not contact AssemblyAI, Google Calendar,
 a microphone, browser speech recognition, or Codex.
 
 Continue to manually verify integrations when a change affects microphone,
@@ -176,6 +176,15 @@ AssemblyAI connection lifecycle and raw transport. `public/codex-call-tracker.js
 explicit supersession/cancellation. `public/tool-result-coordinator.js`
 coordinates the generic pending-result queue, active tasks, reply-done state,
 and result flushing.
+
+`public/session-activity-ledger.js` stores up to 25 safe, completed action
+receipts for the active browser session. The `get_session_activity` tool reads
+only this ledger with `filter: "all" | "failed"` and a 1–10 limit. Do not put
+raw source content, patches, prompts, transcripts, secrets, or absolute paths
+in a receipt. A stale result never reaches the coordinator and therefore never
+creates a receipt; the existing interactive trackers record their explicitly
+sent cancellations. Pause/resume keeps receipts. Disconnect and a new voice
+session clear them.
 
 When adding a tool:
 

@@ -47,6 +47,12 @@ Codex CLI to inspect the current project.
 - Current-activity reporting: while Calendar or Codex work is running, ask what
   Offscreen is doing or working on. The status question does not supersede the
   in-progress work; ordinary new requests still do.
+- Session action receipts: ask what Offscreen just did, what it has done so far,
+  whether a recent action succeeded, or which actions failed. The browser keeps
+  the last 25 completed developer/Codex actions only for the active session;
+  receipts contain concise safe summaries, not source contents, patches,
+  transcripts, credentials, or absolute paths. Pause/resume preserves them;
+  disconnect and the next new session clear them.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
@@ -107,6 +113,8 @@ owns Codex HTTP execution. `public/tool-result-coordinator.js` owns generic
 tool-result queue, task, reply-done, and flush coordination. `public/app.js`
 keeps AssemblyAI application-event semantics, active session IDs, tool turns,
 session/turn checks, and the decision to supersede an earlier turn.
+`public/session-activity-ledger.js` owns the bounded in-memory receipt ledger
+queried by `get_session_activity`; it is not persisted or sent to the server.
 `public/voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
 connection lifecycle, and raw message transport. `public/codex-call-tracker.js` owns
 Codex interactive-call tracking and explicit supersession/cancellation.

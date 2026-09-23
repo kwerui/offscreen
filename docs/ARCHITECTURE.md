@@ -39,6 +39,7 @@ public/
   wake-listener.js        Optional disconnected-state browser speech recognition
   codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
   tool-result-coordinator.js  Generic tool-result queue/task coordination
+  session-activity-ledger.js  Bounded session-local completed-action receipts
   audio.js                Microphone capture and PCM playback
   tools.js                Static AssemblyAI tool definitions
   website-tool.js         Supported website execution
@@ -103,6 +104,18 @@ playback, interruption, and audio cleanup.
 creation and closure, raw parsed inbound events, and JSON outbound messages.
 It does not know about UI, tool names, tool turns, active session IDs, or
 event meaning.
+
+`session-activity-ledger.js` is the browser-owned, bounded evidence layer for
+meaningful completed actions. `app.js` starts receipts only for trackable
+developer/Codex calls and the existing tool-result coordinator completes them
+only when a result belongs to the active session/turn. Existing interactive
+trackers resolve cancellation with the original call ID, so cancelled work is
+recorded as cancelled rather than successful. The ledger retains at most 25
+receipts, excludes raw contents, patches, prompts, transcripts, absolute paths,
+and secrets, and is cleared on disconnect/new session but not pause/resume.
+`get_session_activity` reads this local ledger with only `all`/`failed` filters
+and a 1–10 result limit; it is available in hosted mode but can report only
+actions actually available there.
 
 `wake-listener.js` owns bounded browser `SpeechRecognition`/
 `webkitSpeechRecognition` phrase listening. The disconnected wake listener

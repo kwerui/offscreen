@@ -51,6 +51,7 @@ test("HOSTED_DEMO capabilities omit every local-only voice tool", () => {
   assert.deepEqual(toolNames.sort(), [
     "cancel_current_work",
     "disconnect_session",
+    "get_session_activity",
     "open_website",
     "pause_listening",
     "repeat_last_response",

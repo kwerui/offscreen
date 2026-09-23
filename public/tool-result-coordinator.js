@@ -3,6 +3,7 @@ export function createToolResultCoordinator({
   canSendResults,
   sendToolResult,
   onFlush,
+  onQueueResult,
 }) {
   let pendingResults = [];
   let activeTasks = 0;
@@ -30,6 +31,8 @@ export function createToolResultCoordinator({
     if (!isCurrent(sessionId, toolTurnId)) {
       return;
     }
+
+    onQueueResult?.(callId, result);
 
     pendingResults.push({
       callId,

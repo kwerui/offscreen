@@ -60,6 +60,19 @@ test("defines a no-argument disconnect_session voice tool", () => {
   });
 });
 
+test("defines a bounded session activity inspection tool", () => {
+  const activityTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "get_session_activity"
+  );
+
+  assert.ok(activityTool);
+  assert.deepEqual(activityTool.parameters.required, []);
+  assert.deepEqual(activityTool.parameters.properties.filter.enum, ["all", "failed"]);
+  assert.equal(activityTool.parameters.properties.limit.maximum, 10);
+  assert.match(activityTool.description, /session-local|bounded/i);
+  assert.match(activityTool.description, /Git status|current Git/i);
+});
+
 test("defines a no-argument cancel_current_work voice tool", () => {
   const cancelTool = VOICE_TOOLS.find(
     (tool) => tool.name === "cancel_current_work"

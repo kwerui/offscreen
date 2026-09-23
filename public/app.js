@@ -49,6 +49,7 @@ import {
   createInteractiveCallTracker,
 } from "./codex-call-tracker.js";
 import { createToolResultCoordinator } from "./tool-result-coordinator.js";
+import { createSessionActivityLedger } from "./session-activity-ledger.js";
 import { createVoiceSession } from "./voice-session.js";
 import { createPhraseListener, createWakeListener } from "./wake-listener.js";
 
@@ -84,6 +85,8 @@ let pendingAgentResponse = null;
 let isAgentReplyOpen = false;
 
 const activeActivities = new Map();
+const sessionActivityLedger = createSessionActivityLedger();
+const activityToolCalls = new Map();
 
 let completedUserTurnId = 0;
 
@@ -155,7 +158,10 @@ const FIXED_OFFSCREEN_INSTRUCTIONS =
   "user asks what Offscreen is currently " +
   "doing, working on, or running, answer only from the Current Offscreen activity " +
   "context in the system prompt. Do not call a tool, advertise capabilities, or " +
-  "reinterpret that question as a new task. If nothing is running, say so briefly.";
+  "reinterpret that question as a new task. If nothing is running, say so briefly. " +
+  "For what Offscreen just did, actions completed so far, failed actions, whether a recent action " +
+  "succeeded, or whether a recent test run passed, ALWAYS call get_session_activity. Do not guess " +
+  "from conversation memory. Keep activity answers concise and use the returned receipt summaries.";
 
 const HOSTED_DEMO_PROMPT =
   "You are Offscreen, an eyes-free voice companion. Have a natural conversation " +
@@ -343,6 +349,99 @@ function resolveProjectToolArguments(event) {
     arguments: event.arguments,
     userText: latestCompletedUserTurn?.text,
   }) ?? { success: true, arguments: event.arguments ?? {} };
+}
+
+const ACTIVITY_TOOL_CATEGORIES = new Map([
+  ["get_git_status", "git_status"],
+  ["search_project", "project_search"],
+  ["read_project_file", "project_file"],
+  ["open_project_file", "project_file"],
+  ["run_project_tests", "project_tests"],
+  ["get_git_diff", "git_diff"],
+  ["get_git_history", "git_history"],
+  ["get_commit_diff", "commit_diff"],
+  ["ask_codex", "codex"],
+]);
+
+function beginActionReceipt(event, sessionId, toolTurnId) {
+  const category = ACTIVITY_TOOL_CATEGORIES.get(event.name);
+  if (!category || !isActiveToolTurn(sessionId, toolTurnId)) return;
+
+  if (sessionActivityLedger.begin({
+    callId: event.call_id,
+    tool: event.name,
+    category,
+  })) {
+    activityToolCalls.set(event.call_id, event.name);
+  }
+}
+
+function getActionReceiptSummary(tool, result) {
+  if (result?.cancelled) {
+    return tool === "run_project_tests"
+      ? "The project test run was cancelled."
+      : "The action was cancelled.";
+  }
+
+  if (result?.timedOut || result?.errorCode === "test_timeout") {
+    return tool === "run_project_tests" ? "Project tests timed out." : "The action timed out.";
+  }
+
+  if (!result?.success) return result?.error || "The action failed.";
+
+  if (tool === "get_git_status") {
+    const changedFiles = ["staged", "unstaged", "untracked"]
+      .reduce((count, key) => count + (result[key]?.length ?? 0), 0);
+    return changedFiles === 0 ? "Checked Git status: working tree clean." : `Checked Git status: ${changedFiles} changed files.`;
+  }
+  if (tool === "search_project") return `Searched the project and found ${result.files?.length ?? 0} files.`;
+  if (tool === "read_project_file") return `Read ${result.path ?? "a project file"}.`;
+  if (tool === "open_project_file") return `Opened ${result.path ?? "a project file"}${result.line ? ` at line ${result.line}` : ""}.`;
+  if (tool === "run_project_tests") {
+    return result.passed ? `Ran project tests: ${result.passedCount ?? 0} passed.` : "Ran project tests: failures found.";
+  }
+  if (tool === "get_git_diff") return `Inspected current Git changes across ${result.files?.length ?? 0} files.`;
+  if (tool === "get_git_history") return `Listed ${result.commits?.length ?? 0} recent commits.`;
+  if (tool === "get_commit_diff") return "Inspected changes from a recent commit.";
+  return "Codex completed its project inspection.";
+}
+
+function completeActionReceipt(callId, result) {
+  const tool = activityToolCalls.get(callId);
+  if (!tool) return;
+
+  sessionActivityLedger.setTarget(callId, {
+    path: result?.path,
+    line: result?.line ?? result?.startLine,
+  });
+  const didComplete = sessionActivityLedger.complete(callId, {
+    ...result,
+    summary: getActionReceiptSummary(tool, result),
+  });
+
+  if (didComplete) {
+    activityToolCalls.delete(callId);
+  }
+}
+
+function getSessionActivityResult(argumentsObject) {
+  const filter = argumentsObject?.filter === "failed" ? "failed" : "all";
+  const limit = Number.isInteger(argumentsObject?.limit)
+    ? Math.min(Math.max(argumentsObject.limit, 1), 10)
+    : 5;
+  const receipts = sessionActivityLedger.list({ filter, limit }).map((receipt) => ({
+    sequence: receipt.sequence,
+    tool: receipt.tool,
+    status: receipt.status,
+    summary: receipt.summary,
+    target: receipt.target,
+  }));
+
+  return {
+    success: true,
+    receipts,
+    message: receipts.length === 0 ? "No matching actions have completed in this session." : undefined,
+  };
 }
 
 function getCurrentActivityText() {
@@ -781,6 +880,7 @@ const toolResultCoordinator = createToolResultCoordinator({
   onFlush: (resultCount) => {
     console.log(`Sending ${resultCount} tool result(s)`);
   },
+  onQueueResult: completeActionReceipt,
 });
 
 function invalidateToolTurn(updateActivityPrompt = true) {
@@ -833,6 +933,8 @@ async function connect(connectionStatus = "Requesting token…") {
   const sessionId = activeSessionId + 1;
 
   wakeListener.stop();
+  sessionActivityLedger.clear();
+  activityToolCalls.clear();
   resetStoredAgentResponses();
   standbyMode = false;
   standbyResumePending = false;
@@ -1202,6 +1304,22 @@ function handleEvent(event, sessionId) {
 
 async function handleToolCall(event, sessionId, toolTurnId) {
   console.log("Tool called:", event.name);
+  beginActionReceipt(event, sessionId, toolTurnId);
+
+  // ---------------------------------
+  // SESSION ACTIVITY
+  // ---------------------------------
+
+  if (event.name === "get_session_activity") {
+    toolResultCoordinator.queueResult(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      getSessionActivityResult(event.arguments)
+    );
+
+    return;
+  }
 
   // ---------------------------------
   // PAUSE LISTENING
@@ -1880,6 +1998,8 @@ function sendToolResult(
     return false;
   }
 
+  completeActionReceipt(callId, result);
+
   if (
     pendingDisconnect?.sessionId === sessionId &&
     pendingDisconnect.toolTurnId === toolTurnId &&
@@ -1914,6 +2034,8 @@ function teardown(
   projectTestCallTracker.clear();
   projectReferenceContext?.clear();
   commitReferenceContext?.clear();
+  sessionActivityLedger.clear();
+  activityToolCalls.clear();
   pendingProjectReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
