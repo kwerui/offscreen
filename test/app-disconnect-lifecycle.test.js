@@ -199,7 +199,8 @@ test("sends a disconnect result before ending the session and reconnects normall
     globalThis.WebSocket = originalWebSocket;
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
-    Object.defineProperty(globalThis, "navigator", originalNavigator);
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originalAudioWorkletNode;
   }
 });
