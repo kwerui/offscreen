@@ -12,6 +12,8 @@ const els = {
   statusDot: document.getElementById("status-dot"),
   statusText: document.getElementById("status-text"),
   hostedDemoNotice: document.getElementById("hosted-demo-notice"),
+  activityList: document.getElementById("activity-list"),
+  activityCount: document.getElementById("activity-count"),
 };
 
 let userPartialElement = null;
@@ -20,6 +22,59 @@ let toolStatusTimer = null;
 let toolStatusStartedAt = null;
 let toolStatusSessionId = null;
 let toolStatusTurnId = null;
+
+export function setActivityReceipts(receipts = []) {
+  if (!els.activityList) {
+    return;
+  }
+
+  const safeReceipts = Array.isArray(receipts) ? receipts.slice(-5).reverse() : [];
+  els.activityList.replaceChildren?.();
+
+  if (els.activityCount) {
+    els.activityCount.textContent = `${safeReceipts.length} ${safeReceipts.length === 1 ? "action" : "actions"}`;
+  }
+
+  if (safeReceipts.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "activity-empty";
+    empty.textContent = "No actions yet in this session.";
+    els.activityList.appendChild(empty);
+    return;
+  }
+
+  for (const receipt of safeReceipts) {
+    const item = document.createElement("div");
+    const status = ["running", "success", "failure", "cancelled", "timeout"].includes(receipt?.status)
+      ? receipt.status
+      : "failure";
+    item.className = `activity-item ${status}`;
+
+    const marker = document.createElement("span");
+    marker.className = "activity-marker";
+    marker.setAttribute?.("aria-hidden", "true");
+
+    const content = document.createElement("div");
+    content.className = "activity-content";
+
+    const summary = document.createElement("div");
+    summary.className = "activity-summary";
+    summary.textContent = typeof receipt?.summary === "string"
+      ? receipt.summary
+      : "Activity update.";
+
+    const meta = document.createElement("div");
+    meta.className = "activity-meta";
+    const sequence = Number.isInteger(receipt?.sequence) ? `#${receipt.sequence} · ` : "";
+    meta.textContent = `${sequence}${status}`;
+
+    content.appendChild(summary);
+    content.appendChild(meta);
+    item.appendChild(marker);
+    item.appendChild(content);
+    els.activityList.appendChild(item);
+  }
+}
 
 export function setStatus(state, text) {
   els.statusDot.className = "dot " + state;
