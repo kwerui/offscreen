@@ -184,7 +184,9 @@ raw source content, patches, prompts, transcripts, secrets, or absolute paths
 in a receipt. A stale result never reaches the coordinator and therefore never
 creates a receipt; the existing interactive trackers record their explicitly
 sent cancellations. Pause/resume keeps receipts. Disconnect and a new voice
-session clear them.
+session clear them. `public/ui.js` may display only the five latest receipts
+as a read-only projection; never create a second UI-owned activity store, and
+render receipt strings as text rather than HTML.
 
 When adding a tool:
 
