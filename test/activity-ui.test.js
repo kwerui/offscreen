@@ -46,7 +46,7 @@ test("renders only the five latest activity receipts using text content", async 
     const list = elements.get("activity-list");
     const count = elements.get("activity-count");
 
-    assert.equal(count.textContent, "5 actions");
+    assert.equal(count.textContent, "5 recent");
     assert.equal(list.children.length, 5);
     assert.equal(list.children[0].className, "activity-item success");
     assert.equal(list.children[0].children[1].children[0].textContent, "<img src=x onerror=alert(1)>");
