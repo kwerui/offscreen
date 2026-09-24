@@ -32,7 +32,7 @@ export function setActivityReceipts(receipts = []) {
   els.activityList.replaceChildren?.();
 
   if (els.activityCount) {
-    els.activityCount.textContent = `${safeReceipts.length} ${safeReceipts.length === 1 ? "action" : "actions"}`;
+    els.activityCount.textContent = safeReceipts.length === 0 ? "0 actions" : `${safeReceipts.length} recent`;
   }
 
   if (safeReceipts.length === 0) {
