@@ -49,7 +49,7 @@ Codex CLI to inspect the current project.
   in-progress work; ordinary new requests still do.
 - Session action receipts: ask what Offscreen just did, what it has done so far,
   whether a recent action succeeded, or which actions failed. The browser keeps
-  the last 25 completed developer/Codex actions only for the active session;
+  the last 25 bounded action receipts for the active session, including developer/Codex work plus safe Calendar and controlled-browser actions;
   receipts contain concise safe summaries, not source contents, patches,
   transcripts, credentials, or absolute paths. The page also shows the latest
   five receipts in a compact Activity panel as a read-only projection of the
