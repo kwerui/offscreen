@@ -42,6 +42,8 @@ test("reports completed deterministic actions and clears them for a new session"
     globalThis.fetch = async (url) => {
       if (url === "/api/voice-token") return { ok: true, json: async () => ({ token: "test-token" }) };
       if (url === "/api/developer/git-status") return { ok: true, json: async () => ({ success: true, staged: [{ path: "public/app.js" }], unstaged: [], untracked: [] }) };
+      if (url === "/api/calendar/query?when=today") return { ok: true, json: async () => ({ timezone: "UTC", events: [{ title: "One" }, { title: "Two" }] }) };
+      if (url === "/api/browser") return { ok: true, json: async () => ({ success: true, content: '- link "AssemblyAI" [ref=e1]' }) };
       throw new Error(`Unexpected request: ${url}`);
     };
 
@@ -61,19 +63,51 @@ test("reports completed deterministic actions and clears them for a new session"
       "Checked Git status: 1 changed files."
     );
 
-    socket.receive({ type: "transcript.user", text: "What did you just do?" });
-    socket.receive({ type: "tool.call", name: "get_session_activity", call_id: "activity", arguments: { limit: 1 } });
+    socket.receive({ type: "transcript.user", text: "What do I have today?" });
+    socket.receive({ type: "tool.call", name: "get_calendar_events", call_id: "calendar", arguments: { when: "today" } });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    socket.receive({ type: "transcript.user", text: "Read this page." });
+    socket.receive({ type: "tool.call", name: "browser_read_page", call_id: "browser", arguments: {} });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    assert.equal(elements.get("activity-count").textContent, "3 recent");
+    assert.equal(
+      elements.get("activity-list").children[0].children[1].children[0].textContent,
+      "Read the current browser page."
+    );
+
+    socket.receive({ type: "transcript.user", text: "What have you done so far?" });
+    socket.receive({ type: "tool.call", name: "get_session_activity", call_id: "activity", arguments: { limit: 5 } });
     socket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
 
     const activityResult = socket.sentMessages.find((message) => message.call_id === "activity");
-    assert.deepEqual(JSON.parse(activityResult.result).receipts, [{
-      sequence: 1,
-      tool: "get_git_status",
-      status: "success",
-      summary: "Checked Git status: 1 changed files.",
-      target: {},
-    }]);
+    assert.deepEqual(JSON.parse(activityResult.result).receipts, [
+      {
+        sequence: 1,
+        tool: "get_git_status",
+        status: "success",
+        summary: "Checked Git status: 1 changed files.",
+        target: {},
+      },
+      {
+        sequence: 2,
+        tool: "get_calendar_events",
+        status: "success",
+        summary: "Checked Calendar: 2 events.",
+        target: {},
+      },
+      {
+        sequence: 3,
+        tool: "browser_read_page",
+        status: "success",
+        summary: "Read the current browser page.",
+        target: {},
+      },
+    ]);
   } finally {
     globalThis.fetch = originals.fetch; globalThis.WebSocket = originals.WebSocket;
     globalThis.document = originals.document; globalThis.window = originals.window;
