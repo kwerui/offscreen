@@ -54,7 +54,7 @@ test("reports completed deterministic actions and clears them for a new session"
     socket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
 
-    assert.equal(elements.get("activity-count").textContent, "1 action");
+    assert.equal(elements.get("activity-count").textContent, "1 recent");
     assert.equal(elements.get("activity-list").children.length, 1);
     assert.equal(
       elements.get("activity-list").children[0].children[1].children[0].textContent,
