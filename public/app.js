@@ -366,6 +366,14 @@ const ACTIVITY_TOOL_CATEGORIES = new Map([
   ["get_git_history", "git_history"],
   ["get_commit_diff", "commit_diff"],
   ["ask_codex", "codex"],
+  ["get_calendar_events", "calendar"],
+  ["browser_navigate", "browser"],
+  ["browser_read_page", "browser"],
+  ["browser_find_on_page", "browser"],
+  ["browser_go_back", "browser"],
+  ["browser_type", "browser"],
+  ["browser_confirm_action", "browser"],
+  ["open_website", "website"],
 ]);
 
 function beginActionReceipt(event, sessionId, toolTurnId) {
@@ -409,6 +417,14 @@ function getActionReceiptSummary(tool, result) {
   if (tool === "get_git_diff") return `Inspected current Git changes across ${result.files?.length ?? 0} files.`;
   if (tool === "get_git_history") return `Listed ${result.commits?.length ?? 0} recent commits.`;
   if (tool === "get_commit_diff") return "Inspected changes from a recent commit.";
+  if (tool === "get_calendar_events") return `Checked Calendar: ${result.events?.length ?? 0} events.`;
+  if (tool === "browser_navigate") return "Navigated the controlled browser.";
+  if (tool === "browser_read_page") return "Read the current browser page.";
+  if (tool === "browser_find_on_page") return "Searched the current browser page.";
+  if (tool === "browser_go_back") return "Went back in the controlled browser.";
+  if (tool === "browser_type") return "Typed into the controlled browser without submitting.";
+  if (tool === "browser_confirm_action") return "Confirmed and executed the pending browser action.";
+  if (tool === "open_website") return `Opened ${result.site ?? "a supported website"}.`;
   return "Codex completed its project inspection.";
 }
 
