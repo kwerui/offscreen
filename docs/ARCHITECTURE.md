@@ -92,8 +92,8 @@ server/local machine and are not sent to the browser.
 `styles.css` contains page styles.
 
 `ui.js` owns DOM lookup and presentation, including status, transcript
-rendering, partial user transcript state, control bindings, and tool-status
-bubbles.
+rendering, partial user transcript state, control bindings, tool-status
+bubbles, and the read-only Activity receipt panel.
 
 `audio.js` owns microphone capture, AudioWorklet setup, PCM encoding and
 playback, interruption, and audio cleanup.
@@ -106,8 +106,9 @@ It does not know about UI, tool names, tool turns, active session IDs, or
 event meaning.
 
 `session-activity-ledger.js` is the browser-owned, bounded evidence layer for
-meaningful completed actions. `app.js` starts receipts only for trackable
-developer/Codex calls and the existing tool-result coordinator completes them
+meaningful completed actions. `app.js` starts receipts only for an explicit
+trackable set: developer/Codex calls plus safe Calendar and controlled-browser
+operations. The existing tool-result coordinator completes them
 only when a result belongs to the active session/turn. Existing interactive
 trackers resolve cancellation with the original call ID, so cancelled work is
 recorded as cancelled rather than successful. The ledger retains at most 25
@@ -115,7 +116,13 @@ receipts, excludes raw contents, patches, prompts, transcripts, absolute paths,
 and secrets, and is cleared on disconnect/new session but not pause/resume.
 `get_session_activity` reads this local ledger with only `all`/`failed` filters
 and a 1–10 result limit; it is available in hosted mode but can report only
-actions actually available there.
+actions actually available there. Initial `browser_click` requests are intentionally
+not receipts because a consequential click may only create a pending confirmation;
+`browser_confirm_action` is receipt-eligible when the confirmed action actually runs. The visible Activity panel renders at most
+the five latest receipts from this same ledger, newest first. It is a
+presentation-only projection: it cannot create, complete, cancel, or otherwise
+mutate receipt lifecycle state, and receipt text is inserted via DOM
+`textContent` rather than HTML.
 
 `wake-listener.js` owns bounded browser `SpeechRecognition`/
 `webkitSpeechRecognition` phrase listening. The disconnected wake listener
