@@ -51,8 +51,10 @@ Codex CLI to inspect the current project.
   whether a recent action succeeded, or which actions failed. The browser keeps
   the last 25 completed developer/Codex actions only for the active session;
   receipts contain concise safe summaries, not source contents, patches,
-  transcripts, credentials, or absolute paths. Pause/resume preserves them;
-  disconnect and the next new session clear them.
+  transcripts, credentials, or absolute paths. The page also shows the latest
+  five receipts in a compact Activity panel as a read-only projection of the
+  same ledger. Pause/resume preserves them; disconnect and the next new session
+  clear them.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
@@ -115,6 +117,8 @@ keeps AssemblyAI application-event semantics, active session IDs, tool turns,
 session/turn checks, and the decision to supersede an earlier turn.
 `public/session-activity-ledger.js` owns the bounded in-memory receipt ledger
 queried by `get_session_activity`; it is not persisted or sent to the server.
+`public/ui.js` renders only a bounded snapshot of that ledger in the Activity
+panel and never owns activity lifecycle state.
 `public/voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
 connection lifecycle, and raw message transport. `public/codex-call-tracker.js` owns
 Codex interactive-call tracking and explicit supersession/cancellation.

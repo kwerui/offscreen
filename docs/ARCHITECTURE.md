@@ -92,8 +92,8 @@ server/local machine and are not sent to the browser.
 `styles.css` contains page styles.
 
 `ui.js` owns DOM lookup and presentation, including status, transcript
-rendering, partial user transcript state, control bindings, and tool-status
-bubbles.
+rendering, partial user transcript state, control bindings, tool-status
+bubbles, and the read-only Activity receipt panel.
 
 `audio.js` owns microphone capture, AudioWorklet setup, PCM encoding and
 playback, interruption, and audio cleanup.
@@ -115,7 +115,11 @@ receipts, excludes raw contents, patches, prompts, transcripts, absolute paths,
 and secrets, and is cleared on disconnect/new session but not pause/resume.
 `get_session_activity` reads this local ledger with only `all`/`failed` filters
 and a 1–10 result limit; it is available in hosted mode but can report only
-actions actually available there.
+actions actually available there. The visible Activity panel renders at most
+the five latest receipts from this same ledger, newest first. It is a
+presentation-only projection: it cannot create, complete, cancel, or otherwise
+mutate receipt lifecycle state, and receipt text is inserted via DOM
+`textContent` rather than HTML.
 
 `wake-listener.js` owns bounded browser `SpeechRecognition`/
 `webkitSpeechRecognition` phrase listening. The disconnected wake listener

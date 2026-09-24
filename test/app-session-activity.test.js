@@ -16,7 +16,7 @@ function createElement() {
     addEventListener(type, listener) { this.listeners ??= {}; this.listeners[type] = listener; },
     appendChild(child) { child.parentNode = this; this.children ??= []; this.children.push(child); return child; },
     children: [], classList: { remove() {} }, disabled: false, hidden: true, parentNode: null,
-    remove() {}, scrollHeight: 0, scrollTop: 0, textContent: "", value: "",
+    remove() {}, replaceChildren(...children) { this.children = children; for (const child of children) child.parentNode = this; }, scrollHeight: 0, scrollTop: 0, textContent: "", value: "",
   };
 }
 
@@ -31,7 +31,7 @@ test("reports completed deterministic actions and clears them for a new session"
 
   try {
     const elements = new Map();
-    for (const id of ["connect", "disconnect", "voice-wake", "resume-listening", "clear", "voice", "prompt", "greeting", "transcript", "empty", "status-dot", "status-text", "hosted-demo-notice"]) elements.set(id, createElement());
+    for (const id of ["connect", "disconnect", "voice-wake", "resume-listening", "clear", "voice", "prompt", "greeting", "transcript", "empty", "status-dot", "status-text", "hosted-demo-notice", "activity-list", "activity-count"]) elements.set(id, createElement());
     elements.get("empty").parentNode = elements.get("transcript");
     globalThis.document = { createElement, getElementById: (id) => elements.get(id) };
     globalThis.window = { AudioContext: class { constructor() { this.audioWorklet = { addModule: async () => {} }; this.currentTime = 0; } close() {} createMediaStreamSource() { return { connect() {}, disconnect() {} }; } } };
@@ -53,6 +53,14 @@ test("reports completed deterministic actions and clears them for a new session"
     socket.receive({ type: "tool.call", name: "get_git_status", call_id: "status", arguments: {} });
     socket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
+
+    assert.equal(elements.get("activity-count").textContent, "1 recent");
+    assert.equal(elements.get("activity-list").children.length, 1);
+    assert.equal(
+      elements.get("activity-list").children[0].children[1].children[0].textContent,
+      "Checked Git status: 1 changed files."
+    );
+
     socket.receive({ type: "transcript.user", text: "What did you just do?" });
     socket.receive({ type: "tool.call", name: "get_session_activity", call_id: "activity", arguments: { limit: 1 } });
     socket.receive({ type: "reply.done", status: "completed" });
@@ -69,7 +77,8 @@ test("reports completed deterministic actions and clears them for a new session"
   } finally {
     globalThis.fetch = originals.fetch; globalThis.WebSocket = originals.WebSocket;
     globalThis.document = originals.document; globalThis.window = originals.window;
-    Object.defineProperty(globalThis, "navigator", originals.navigator);
+    if (originals.navigator) Object.defineProperty(globalThis, "navigator", originals.navigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originals.AudioWorkletNode;
     globalThis.__OFFSCREEN_CAPABILITIES__ = originals.capabilities;
   }

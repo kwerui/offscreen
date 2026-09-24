@@ -10,6 +10,7 @@ import {
   setHostedDemoPrompt,
   setListeningControlState,
   setStatus,
+  setActivityReceipts,
   setVoiceWakeButtonState,
   setVoiceWakeUnavailable,
   setHostedDemoNoticeVisible,
@@ -87,6 +88,10 @@ let isAgentReplyOpen = false;
 const activeActivities = new Map();
 const sessionActivityLedger = createSessionActivityLedger();
 const activityToolCalls = new Map();
+
+function syncActivityReceipts() {
+  setActivityReceipts(sessionActivityLedger.list({ limit: 5 }));
+}
 
 let completedUserTurnId = 0;
 
@@ -373,6 +378,7 @@ function beginActionReceipt(event, sessionId, toolTurnId) {
     category,
   })) {
     activityToolCalls.set(event.call_id, event.name);
+    syncActivityReceipts();
   }
 }
 
@@ -421,6 +427,7 @@ function completeActionReceipt(callId, result) {
 
   if (didComplete) {
     activityToolCalls.delete(callId);
+    syncActivityReceipts();
   }
 }
 
@@ -935,6 +942,7 @@ async function connect(connectionStatus = "Requesting token…") {
   wakeListener.stop();
   sessionActivityLedger.clear();
   activityToolCalls.clear();
+  syncActivityReceipts();
   resetStoredAgentResponses();
   standbyMode = false;
   standbyResumePending = false;
@@ -2036,6 +2044,7 @@ function teardown(
   commitReferenceContext?.clear();
   sessionActivityLedger.clear();
   activityToolCalls.clear();
+  syncActivityReceipts();
   pendingProjectReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
