@@ -178,7 +178,10 @@ coordinates the generic pending-result queue, active tasks, reply-done state,
 and result flushing.
 
 `public/session-activity-ledger.js` stores up to 25 safe, completed action
-receipts for the active browser session. The `get_session_activity` tool reads
+receipts for the active browser session. Trackable actions include developer/Codex
+operations plus safe Calendar and controlled-browser actions. Do not record the
+initial `browser_click` request because confirmation-required is not execution;
+record the later `browser_confirm_action` result instead. The `get_session_activity` tool reads
 only this ledger with `filter: "all" | "failed"` and a 1–10 limit. Do not put
 raw source content, patches, prompts, transcripts, secrets, or absolute paths
 in a receipt. A stale result never reaches the coordinator and therefore never
