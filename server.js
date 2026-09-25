@@ -99,7 +99,7 @@ export function createApp({
   const commitReferences = new Map();
 
 app.get("/api/capabilities.js", (_req, res) => {
-  res.type("application/javascript").send(
+  res.set("Cache-Control", "no-store").type("application/javascript").send(
     `globalThis.__OFFSCREEN_CAPABILITIES__ = ${JSON.stringify(clientCapabilities)};`
   );
 });
