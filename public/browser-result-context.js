@@ -1,4 +1,5 @@
 const MAX_RESULTS = 5;
+const MAX_OBSERVED_LINKS = 20;
 const CONSEQUENTIAL_LINK_PATTERN = /\b(approve|authorize|confirm|continue|delete|donate|pay|place order|publish|purchase|buy|checkout|remove|save changes|send|submit|subscribe|transfer|withdraw)\b/i;
 
 const INDEXES = new Map([
@@ -54,7 +55,7 @@ export function extractBrowserLinkResults(content) {
       ref: match[2],
     });
 
-    if (results.length >= MAX_RESULTS) break;
+    if (results.length >= MAX_OBSERVED_LINKS) break;
   }
 
   return results;
@@ -90,7 +91,8 @@ export function createBrowserResultContext() {
       .sort((left, right) =>
         left.spokenIndex - right.spokenIndex || left.index - right.index
       )
-      .map((entry) => entry.result);
+      .map((entry) => entry.result)
+      .slice(0, MAX_RESULTS);
 
     pending = null;
     pendingReady = false;
