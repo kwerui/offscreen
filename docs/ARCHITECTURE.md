@@ -41,6 +41,7 @@ public/
   tool-result-coordinator.js  Generic tool-result queue/task coordination
   session-activity-ledger.js  Bounded session-local completed-action receipts
   browser-result-context.js  Spoken-only bounded browser link references
+  browser-search.js        Fixed-provider bounded web search request builder
   audio.js                Microphone capture and PCM playback
   tools.js                Static AssemblyAI tool definitions
   website-tool.js         Supported website execution
@@ -229,6 +230,13 @@ and navigation/page-changing actions, interruption, disconnect, or a new
 session clear it. The dedicated `browser_open_result` tool accepts only a
 position and reuses the existing validated click adapter; it cannot accept a
 URL, selector, or raw ref.
+
+`browser-search.js` validates and normalizes one bounded public-web query and
+builds only the fixed HTTPS DuckDuckGo HTML search URL. `browser_search_web`
+does not add a backend MCP action: `app.js` composes the existing
+`navigate` then `snapshot` operations, returns only the normalized query and
+bounded snapshot content, and registers those snapshot links with the same
+spoken-result context.
 
 ### `browser-mcp.js`
 
