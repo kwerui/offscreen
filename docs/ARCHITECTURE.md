@@ -116,7 +116,11 @@ trackers resolve cancellation with the original call ID, so cancelled work is
 recorded as cancelled rather than successful. The ledger retains at most 25
 receipts, excludes raw contents, patches, prompts, transcripts, absolute paths,
 and secrets, and is cleared on disconnect/new session but not pause/resume.
-`get_session_activity` reads this local ledger with only `all`/`failed` filters
+Before a tool turn is invalidated, `app.js` terminalizes any still-running
+receipts owned by that exact session/turn as cancelled with a bounded internal
+superseded/interrupted/cancelled summary. The later stale tool result remains
+discarded and cannot overwrite that terminal receipt. `get_session_activity`
+reads this local ledger with only `all`/`failed` filters
 and a 1–10 result limit; it is available in hosted mode but can report only
 actions actually available there. Initial `browser_click` requests are intentionally
 not receipts because a consequential click may only create a pending confirmation;
