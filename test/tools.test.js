@@ -9,6 +9,7 @@ test("defines the bounded browser voice tools", () => {
     ["browser_find_on_page", ["text"]],
     ["browser_go_back", []],
     ["browser_click", ["target"]],
+    ["browser_open_result", ["position"]],
     ["browser_type", ["target", "text"]],
     ["browser_confirm_action", []],
   ];
@@ -30,6 +31,19 @@ test("describes safe ref-only browser interaction", () => {
   assert.match(clickTool.description, /never repeat.*failed click.*refreshed/i);
   assert.match(typeTool.description, /never submits/i);
   assert.match(typeTool.description, /not editable.*read or find/i);
+});
+
+test("defines a bounded contextual browser result tool", () => {
+  const resultTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "browser_open_result"
+  );
+
+  assert.ok(resultTool);
+  assert.deepEqual(resultTool.parameters.required, ["position"]);
+  assert.equal(resultTool.parameters.properties.position.minimum, 1);
+  assert.equal(resultTool.parameters.properties.position.maximum, 5);
+  assert.match(resultTool.description, /actually heard|spoken-result/i);
+  assert.match(resultTool.description, /never provide.*URL.*selector.*ref/i);
 });
 
 test("defines a no-argument browser_confirm_action voice tool", () => {
