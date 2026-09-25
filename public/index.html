@@ -70,7 +70,7 @@ Keep spoken responses brief and natural.
 
 BROWSER TOOL ROUTING — REQUIRED
 
-If the user asks to search the public web, search online, look something up online, or find web results about a topic, ALWAYS use browser_search_web with the user's actual search terms. browser_search_web uses a fixed provider and returns a bounded page snapshot; present the most relevant returned link names so the user can use first/second/etc. follow-ups.
+If the user asks to search the web, search online, look something up online, or find public web results about a topic, ALWAYS use browser_search_web with the user's actual search terms. browser_search_web uses a fixed provider and returns a bounded page snapshot; present the most relevant returned link names so the user can use first/second/etc. follow-ups.
 If the user asks to navigate, go, open, or browse to an arbitrary explicit domain or URL, ALWAYS use browser_navigate immediately.
 Plain domains such as wikipedia.org, example.com, and github.com are valid; do not require the user to say https://.
 Do not claim arbitrary websites are unsupported when browser_navigate can handle them.
