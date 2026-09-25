@@ -40,6 +40,7 @@ public/
   codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
   tool-result-coordinator.js  Generic tool-result queue/task coordination
   session-activity-ledger.js  Bounded session-local completed-action receipts
+  browser-result-context.js  Spoken-only bounded browser link references
   audio.js                Microphone capture and PCM playback
   tools.js                Static AssemblyAI tool definitions
   website-tool.js         Supported website execution
@@ -216,6 +217,18 @@ and shared reference registration.
 actions and confirmation control requests. It calls the local browser endpoint
 and returns normalized results; it does not know about MCP, AssemblyAI sessions,
 tool turns, or result queues.
+
+`browser-result-context.js` owns the client-side authority for contextual
+browser ordinals such as “open the second result.” A successful page read/find
+extracts at most five ordinary navigation links from the current observed refs;
+links with consequential action wording are excluded. The context becomes
+eligible only after the tool result was actually sent and the agent's completed
+spoken response contains the exact link label. Ordinal order follows spoken
+order, not hidden page order. A fresh page read/find replaces prior authority,
+and navigation/page-changing actions, interruption, disconnect, or a new
+session clear it. The dedicated `browser_open_result` tool accepts only a
+position and reuses the existing validated click adapter; it cannot accept a
+URL, selector, or raw ref.
 
 ### `browser-mcp.js`
 
