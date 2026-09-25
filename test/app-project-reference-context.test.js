@@ -204,7 +204,8 @@ test("binds contextual ordinals to spoken search paths and keeps the list after 
   } finally {
     globalThis.fetch = originals.fetch; globalThis.WebSocket = originals.WebSocket;
     globalThis.document = originals.document; globalThis.window = originals.window;
-    Object.defineProperty(globalThis, "navigator", originals.navigator);
+    if (originals.navigator) Object.defineProperty(globalThis, "navigator", originals.navigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originals.AudioWorkletNode;
     globalThis.__OFFSCREEN_CAPABILITIES__ = originals.capabilities;
   }

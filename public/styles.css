@@ -167,6 +167,101 @@ button.danger {
   font-weight: 600;
 }
 
+
+.activity-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.activity-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.activity-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.activity-header p,
+#activity-count {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+#activity-count {
+  white-space: nowrap;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activity-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.activity-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: 0 0 auto;
+  background: var(--muted);
+}
+
+.activity-item.running .activity-marker {
+  background: #e6c25b;
+  animation: pulse 1.2s infinite;
+}
+
+.activity-item.success .activity-marker {
+  background: var(--accent-2);
+}
+
+.activity-item.failure .activity-marker,
+.activity-item.timeout .activity-marker {
+  background: var(--danger);
+}
+
+.activity-content {
+  min-width: 0;
+}
+
+.activity-summary {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.activity-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
 .transcript {
   background: var(--panel);
   border: 1px solid var(--border);
