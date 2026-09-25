@@ -331,8 +331,27 @@ before changes. Make one requested change at a time; retain protected voice
 lifecycle behavior; run relevant tests (full `npm test` after non-trivial work),
 `git diff --check`, and review the actual diff. Current local Codex execution
 uses a filtered project copy and read-only mode, but it is **not** host-level
-isolation. `offscreen.zip` is a tracked legacy artifact-cleanup task, never a
+isolation. Root-level ZIP archives are ignored and must not be used as a source
+of truth. Generate a submission archive only from the exact reviewed release
+commit.
+
+
+## Release artifact
+
+Do not commit ZIP snapshots of the working tree. The Git commit is the release
 source of truth.
+
+After selecting and reviewing the exact submission commit, create a clean
+archive from that commit, for example:
+
+\`\`\`bash
+git archive --format=zip --output=offscreen.zip <release-commit>
+\`\`\`
+
+This includes only tracked files from that commit, so ignored local secrets such
+as .env, credentials.json, token.json, node_modules, and local working-tree
+extras are not copied into the archive. Inspect the resulting archive before
+uploading it, and do not add it back to Git.
 
 ## Debugging guide
 
