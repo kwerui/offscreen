@@ -124,6 +124,11 @@ standby/resume, and demo rehearsal.
 
 ## P1 — Deployment
 
+**Status: hosted-safe route/capability gating and baseline HTTP hardening are
+implemented. Public binding is deliberately still blocked pending a concrete
+token-abuse/rate-limit, trusted-proxy, HTTPS, and origin strategy. See
+docs/DEPLOYMENT.md.**
+
 Hosted-safe mode already exists. After the P0 workflows are strong, complete
 token and public-HTTP security, deployment configuration, and application URL
 verification. Add bounded hosted browser capability only if time and safety
