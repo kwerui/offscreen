@@ -221,15 +221,6 @@ test("opens only a numbered browser link the user actually heard", async () => {
     socket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
 
-    assert.deepEqual(browserRequests, [
-      { action: "snapshot" },
-      {
-        action: "click",
-        target: "e1",
-        element: "Alpha result",
-      },
-    ]);
-
     const openResult = socket.sentMessages.find(
       (message) => message.call_id === "open-result"
     );
@@ -238,6 +229,15 @@ test("opens only a numbered browser link the user actually heard", async () => {
       success: true,
       content: "Opened",
     });
+
+    assert.deepEqual(browserRequests, [
+      { action: "snapshot" },
+      {
+        action: "click",
+        target: "e1",
+        element: "Alpha result",
+      },
+    ]);
   } finally {
     globalThis.fetch = originals.fetch;
     globalThis.WebSocket = originals.WebSocket;
