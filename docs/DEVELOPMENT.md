@@ -344,9 +344,9 @@ source of truth.
 After selecting and reviewing the exact submission commit, create a clean
 archive from that commit, for example:
 
-\`\`\`bash
+```bash
 git archive --format=zip --output=offscreen.zip <release-commit>
-\`\`\`
+```
 
 This includes only tracked files from that commit, so ignored local secrets such
 as .env, credentials.json, token.json, node_modules, and local working-tree
