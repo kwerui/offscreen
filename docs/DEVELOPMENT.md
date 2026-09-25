@@ -191,9 +191,12 @@ initial `browser_click` request because confirmation-required is not execution;
 record the later `browser_confirm_action` result instead. The `get_session_activity` tool reads
 only this ledger with `filter: "all" | "failed"` and a 1–10 limit. Do not put
 raw source content, patches, prompts, transcripts, secrets, or absolute paths
-in a receipt. A stale result never reaches the coordinator and therefore never
-creates a receipt; the existing interactive trackers record their explicitly
-sent cancellations. Pause/resume keeps receipts. Disconnect and a new voice
+in a receipt. A late stale result never reaches the coordinator. If a tracked
+action had already started a running receipt, turn invalidation first
+terminalizes that receipt with an internal cancelled/superseded/interrupted
+summary; the late result cannot mutate it. Existing interactive trackers still
+send their explicit cancellation result with the original call ID when
+applicable. Pause/resume keeps receipts. Disconnect and a new voice
 session clear them. `public/ui.js` may display only the five latest receipts
 as a read-only projection; never create a second UI-owned activity store, and
 render receipt strings as text rather than HTML.
