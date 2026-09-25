@@ -176,6 +176,33 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "browser_search_web",
+
+    description:
+      "Search the public web through Offscreen's controlled browser using one bounded text query. " +
+      "Use for requests such as 'search the web for', 'look up online', or 'find web results about'. " +
+      "The client uses a fixed search provider, then reads a bounded page snapshot so result links can " +
+      "be spoken and later selected with browser_open_result. Do not use for private account data, " +
+      "arbitrary URLs, form submission, or write actions.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The public web search query, without a URL or search-engine command.",
+        },
+      },
+      required: ["query"],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
     name: "browser_navigate",
 
     description:
@@ -648,6 +675,7 @@ const DEVELOPER_WORKSPACE_TOOL_NAMES = new Set([
   "run_project_tests",
 ]);
 const BROWSER_TOOL_NAMES = new Set([
+  "browser_search_web",
   "browser_navigate",
   "browser_read_page",
   "browser_find_on_page",
