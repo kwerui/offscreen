@@ -76,14 +76,30 @@ export function createApp({
   const capabilities = getCapabilities(mode);
   const clientCapabilities = getClientCapabilities(mode);
   const app = express();
+
+  app.disable("x-powered-by");
+
+  app.use((_req, res, next) => {
+    res.set("X-Content-Type-Options", "nosniff");
+    res.set("X-Frame-Options", "DENY");
+    res.set("Referrer-Policy", "no-referrer");
+    res.set("Permissions-Policy", "camera=(), geolocation=()");
+    next();
+  });
+
+  app.use("/api", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
+  app.use(express.json({ limit: "16kb", strict: true }));
+
   // These opaque references are issued only after fixed recent-history
   // inspection. The browser keeps them out of model-facing tool results.
   const commitReferences = new Map();
 
-app.use(express.json());
-
 app.get("/api/capabilities.js", (_req, res) => {
-  res.set("Cache-Control", "no-store").type("application/javascript").send(
+  res.type("application/javascript").send(
     `globalThis.__OFFSCREEN_CAPABILITIES__ = ${JSON.stringify(clientCapabilities)};`
   );
 });
@@ -100,8 +116,7 @@ app.get("/api/voice-token", async (_req, res) => {
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      console.error(`Token mint failed: ${response.status} ${body}`);
+      console.error(`Token mint failed with status ${response.status}`);
       return res.status(502).json({ error: "Failed to mint token" });
     }
 
