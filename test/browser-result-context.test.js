@@ -24,6 +24,7 @@ test("extracts only bounded ordinary links from browser output", () => {
     { label: "Gamma", ref: "e4" },
     { label: "Delta", ref: "e5" },
     { label: "Epsilon", ref: "e6" },
+    { label: "Zeta", ref: "e7" },
   ]);
 });
 
@@ -100,4 +101,30 @@ test("rejects positions outside the bounded spoken result range", () => {
   assert.equal(context.resolve({ position: 0 }, "").success, false);
   assert.equal(context.resolve({ position: 6 }, "").success, false);
   assert.equal(context.resolve({}, "open the sixth result").success, false);
+});
+
+
+test("authorizes at most five spoken links from a larger observed pool", () => {
+  const context = createBrowserResultContext();
+  const content = Array.from({ length: 8 }, (_, index) =>
+    '- link "Result ' + (index + 1) + '" [ref=e' + (index + 1) + ']'
+  ).join("\n");
+
+  context.registerResult(content);
+  context.markPendingReady();
+  context.alignPending(
+    "Result 8, Result 7, Result 6, Result 5, Result 4, Result 3, Result 2, Result 1"
+  );
+
+  assert.deepEqual(context.resolve({ position: 1 }, ""), {
+    success: true,
+    target: "e8",
+    label: "Result 8",
+  });
+  assert.deepEqual(context.resolve({ position: 5 }, ""), {
+    success: true,
+    target: "e4",
+    label: "Result 4",
+  });
+  assert.equal(context.resolve({ position: 6 }, "").success, false);
 });
