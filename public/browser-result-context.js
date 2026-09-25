@@ -1,4 +1,5 @@
 const MAX_RESULTS = 5;
+const CONSEQUENTIAL_LINK_PATTERN = /\b(approve|authorize|confirm|continue|delete|donate|pay|place order|publish|purchase|buy|checkout|remove|save changes|send|submit|subscribe|transfer|withdraw)\b/i;
 
 const INDEXES = new Map([
   ["first", 0],
@@ -45,7 +46,7 @@ export function extractBrowserLinkResults(content) {
   const pattern = /^\s*[-*]\s*link\s+"([^"\n]{1,240})"\s+\[ref=((?:e\d+|[a-z][a-z0-9]*e\d+))\]/gim;
 
   for (const match of content.matchAll(pattern)) {
-    if (seenRefs.has(match[2])) continue;
+    if (seenRefs.has(match[2]) || CONSEQUENTIAL_LINK_PATTERN.test(match[1])) continue;
 
     seenRefs.add(match[2]);
     results.push({
