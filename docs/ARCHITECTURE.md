@@ -53,7 +53,6 @@ public/
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
-offscreen.zip             Tracked release/archive artifact
 docs/                     Project documentation
 ```
 
@@ -308,12 +307,12 @@ important month-boundary cases.
 This Node built-in test suite mocks `fetch` to protect the existing Calendar
 request URL and success, HTTP-failure, and network-failure result shapes.
 
-### `offscreen.zip`
+### Release archives
 
-This is an archive artifact, not application code. The audit found that its
-copies of `server.js` and `public/index.html` differ from the current tracked
-source, so it must be regenerated from the exact release commit before
-submission.
+Release ZIPs are generated artifacts, not application source. Root-level ZIP
+files are ignored and must not be committed. For a submission artifact, create
+the archive from the exact reviewed release commit (for example with
+`git archive`) so the repository commit remains the single source of truth.
 
 ## Current request and data flow
 
@@ -503,7 +502,7 @@ These are audit findings, not evidence that every path currently fails.
   wake, standby, disconnect, repeat/summarize, current-activity, Codex-call,
   and tool-result lifecycle behavior. Real integrations still need manual
   verification.
-- `offscreen.zip` is stale and must not be trusted as a release artifact.
+- Release archives are not tracked; generate any submission ZIP from the exact reviewed release commit.
 
 ## Proposed target architecture
 
