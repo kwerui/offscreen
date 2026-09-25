@@ -21,6 +21,7 @@ const LOCAL_ONLY_TOOL_NAMES = [
   "get_git_status",
   "run_project_tests",
   "ask_codex",
+  "browser_search_web",
   "browser_navigate",
   "browser_read_page",
   "browser_find_on_page",
