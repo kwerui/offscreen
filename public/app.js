@@ -10,6 +10,7 @@ import {
   setHostedDemoPrompt,
   setListeningControlState,
   setStatus,
+  setActivityReceipts,
   setVoiceWakeButtonState,
   setVoiceWakeUnavailable,
   setHostedDemoNoticeVisible,
@@ -42,6 +43,7 @@ import {
 import { runProjectTests } from "./project-tests-tool.js";
 import { createProjectReferenceContext } from "./project-reference-context.js";
 import { createCommitReferenceContext } from "./commit-reference-context.js";
+import { createBrowserResultContext } from "./browser-result-context.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import {
@@ -88,6 +90,10 @@ const activeActivities = new Map();
 const sessionActivityLedger = createSessionActivityLedger();
 const activityToolCalls = new Map();
 
+function syncActivityReceipts() {
+  setActivityReceipts(sessionActivityLedger.list({ limit: 5 }));
+}
+
 let completedUserTurnId = 0;
 
 let latestCompletedUserTurn = null;
@@ -102,9 +108,13 @@ const projectReferenceContext = capabilities.developerWorkspace
 const commitReferenceContext = capabilities.developerWorkspace
   ? createCommitReferenceContext()
   : null;
+const browserResultContext = capabilities.browserControl
+  ? createBrowserResultContext()
+  : null;
 
 let pendingProjectReferenceResultCallId = null;
 let pendingCommitReferenceResultCallId = null;
+let pendingBrowserReferenceResultCallId = null;
 let pendingBrowserConfirmation = null;
 
 const EXPLICIT_CONFIRMATION_RESPONSES = new Set([
@@ -361,6 +371,15 @@ const ACTIVITY_TOOL_CATEGORIES = new Map([
   ["get_git_history", "git_history"],
   ["get_commit_diff", "commit_diff"],
   ["ask_codex", "codex"],
+  ["get_calendar_events", "calendar"],
+  ["browser_navigate", "browser"],
+  ["browser_read_page", "browser"],
+  ["browser_find_on_page", "browser"],
+  ["browser_open_result", "browser"],
+  ["browser_go_back", "browser"],
+  ["browser_type", "browser"],
+  ["browser_confirm_action", "browser"],
+  ["open_website", "website"],
 ]);
 
 function beginActionReceipt(event, sessionId, toolTurnId) {
@@ -373,6 +392,7 @@ function beginActionReceipt(event, sessionId, toolTurnId) {
     category,
   })) {
     activityToolCalls.set(event.call_id, event.name);
+    syncActivityReceipts();
   }
 }
 
@@ -403,6 +423,15 @@ function getActionReceiptSummary(tool, result) {
   if (tool === "get_git_diff") return `Inspected current Git changes across ${result.files?.length ?? 0} files.`;
   if (tool === "get_git_history") return `Listed ${result.commits?.length ?? 0} recent commits.`;
   if (tool === "get_commit_diff") return "Inspected changes from a recent commit.";
+  if (tool === "get_calendar_events") return `Checked Calendar: ${result.events?.length ?? 0} events.`;
+  if (tool === "browser_navigate") return "Navigated the controlled browser.";
+  if (tool === "browser_read_page") return "Read the current browser page.";
+  if (tool === "browser_find_on_page") return "Searched the current browser page.";
+  if (tool === "browser_open_result") return "Opened a spoken browser result.";
+  if (tool === "browser_go_back") return "Went back in the controlled browser.";
+  if (tool === "browser_type") return "Typed into the controlled browser without submitting.";
+  if (tool === "browser_confirm_action") return "Confirmed and executed the pending browser action.";
+  if (tool === "open_website") return `Opened ${result.site ?? "a supported website"}.`;
   return "Codex completed its project inspection.";
 }
 
@@ -421,6 +450,7 @@ function completeActionReceipt(callId, result) {
 
   if (didComplete) {
     activityToolCalls.delete(callId);
+    syncActivityReceipts();
   }
 }
 
@@ -870,6 +900,10 @@ const toolResultCoordinator = createToolResultCoordinator({
         commitReferenceContext?.markPendingHistoryReady();
         pendingCommitReferenceResultCallId = null;
       }
+      if (callId === pendingBrowserReferenceResultCallId) {
+        browserResultContext?.markPendingReady();
+        pendingBrowserReferenceResultCallId = null;
+      }
 
       codexCallTracker.resolveCall(callId);
       projectTestCallTracker.resolveCall(callId);
@@ -888,8 +922,10 @@ function invalidateToolTurn(updateActivityPrompt = true) {
   pendingDisconnect = null;
   pendingProjectReferenceResultCallId = null;
   pendingCommitReferenceResultCallId = null;
+  pendingBrowserReferenceResultCallId = null;
   projectReferenceContext?.discardPendingSearchResult();
   commitReferenceContext?.discardPendingHistory();
+  browserResultContext?.discardPending();
   toolResultCoordinator.reset();
   clearToolStatus();
   clearActivities(updateActivityPrompt);
@@ -935,6 +971,9 @@ async function connect(connectionStatus = "Requesting token…") {
   wakeListener.stop();
   sessionActivityLedger.clear();
   activityToolCalls.clear();
+  syncActivityReceipts();
+  browserResultContext?.clear();
+  pendingBrowserReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
   standbyResumePending = false;
@@ -1283,6 +1322,7 @@ function handleEvent(event, sessionId) {
         if (pendingAgentResponse?.trim()) {
           projectReferenceContext?.alignPendingSearchResult(pendingAgentResponse);
           commitReferenceContext?.alignPendingHistory(pendingAgentResponse);
+          browserResultContext?.alignPending(pendingAgentResponse);
           lastCompletedAgentResponse = pendingAgentResponse;
         }
 
@@ -1500,6 +1540,64 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // BROWSER
   // ---------------------------------
 
+  if (event.name === "browser_open_result") {
+    const resolvedResult = browserResultContext?.resolve(
+      event.arguments,
+      latestCompletedUserTurn?.text
+    ) ?? {
+      success: false,
+      error: "Contextual browser results are unavailable.",
+    };
+
+    if (!resolvedResult.success) {
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        { success: false, error: resolvedResult.error }
+      );
+      return;
+    }
+
+    clearPendingBrowserConfirmation();
+    browserResultContext?.clear();
+    pendingBrowserReferenceResultCallId = null;
+
+    startActivity(
+      sessionId,
+      toolTurnId,
+      event.call_id,
+      "Opening a spoken browser result."
+    );
+
+    try {
+      let result = await runBrowserTool("click", {
+        target: resolvedResult.target,
+        element: resolvedResult.label,
+      });
+
+      if (result.confirmation_required) {
+        await runBrowserTool("cancel_confirmation");
+        result = {
+          success: false,
+          error:
+            "That browser result requires explicit confirmation and cannot be opened by ordinal.",
+        };
+      }
+
+      toolResultCoordinator.queueResult(
+        sessionId,
+        toolTurnId,
+        event.call_id,
+        result
+      );
+    } finally {
+      finishActivity(sessionId, toolTurnId, event.call_id);
+    }
+
+    return;
+  }
+
   const browserActions = {
     browser_navigate: {
       action: "navigate",
@@ -1546,6 +1644,8 @@ async function handleToolCall(event, sessionId, toolTurnId) {
       // The backend invalidates its exact stored action synchronously as part
       // of these page-changing operations. Mirror that lifecycle locally.
       clearPendingBrowserConfirmation();
+      browserResultContext?.clear();
+      pendingBrowserReferenceResultCallId = null;
     }
 
     startActivity(
@@ -1568,6 +1668,11 @@ async function handleToolCall(event, sessionId, toolTurnId) {
         // The backend refresh replaces its observed refs and invalidates the
         // stored confirmation. Keep the model-facing state in lockstep.
         clearPendingBrowserConfirmation();
+
+        if (isActiveToolTurn(sessionId, toolTurnId)) {
+          browserResultContext?.registerResult(result.content);
+          pendingBrowserReferenceResultCallId = event.call_id;
+        }
       }
 
       if (result.confirmation_required) {
@@ -2034,9 +2139,12 @@ function teardown(
   projectTestCallTracker.clear();
   projectReferenceContext?.clear();
   commitReferenceContext?.clear();
+  browserResultContext?.clear();
   sessionActivityLedger.clear();
   activityToolCalls.clear();
+  syncActivityReceipts();
   pendingProjectReferenceResultCallId = null;
+  pendingBrowserReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
   standbyResumePending = false;

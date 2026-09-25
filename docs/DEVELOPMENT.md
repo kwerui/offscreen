@@ -138,9 +138,13 @@ matching implementation:
 - `browser_navigate`, `browser_read_page`, `browser_find_on_page`,
   `browser_go_back`, `browser_click`, and `browser_type` call the local browser
   route. Its backend adapter owns a lazy, reused Playwright MCP connection and
-  exposes only those six actions. A consequential `browser_click` stores its
-  exact observed target without clicking; `browser_confirm_action` can execute
-  only that stored action after a later explicit affirmative user turn.
+  exposes only those six backend actions. `browser_open_result` is a client-side
+  contextual wrapper: it resolves positions 1–5 only against ordinary link refs
+  whose labels were returned by the latest read/find result and then actually
+  spoken by the agent, and it reuses the same validated click path. A
+  consequential `browser_click` stores its exact observed target without
+  clicking; `browser_confirm_action` can execute only that stored action after a
+  later explicit affirmative user turn.
 
 The browser packages the outcome as a `tool.result` message for AssemblyAI.
 AssemblyAI then uses that result to speak its answer.
@@ -178,13 +182,18 @@ coordinates the generic pending-result queue, active tasks, reply-done state,
 and result flushing.
 
 `public/session-activity-ledger.js` stores up to 25 safe, completed action
-receipts for the active browser session. The `get_session_activity` tool reads
+receipts for the active browser session. Trackable actions include developer/Codex
+operations plus safe Calendar and controlled-browser actions. Do not record the
+initial `browser_click` request because confirmation-required is not execution;
+record the later `browser_confirm_action` result instead. The `get_session_activity` tool reads
 only this ledger with `filter: "all" | "failed"` and a 1–10 limit. Do not put
 raw source content, patches, prompts, transcripts, secrets, or absolute paths
 in a receipt. A stale result never reaches the coordinator and therefore never
 creates a receipt; the existing interactive trackers record their explicitly
 sent cancellations. Pause/resume keeps receipts. Disconnect and a new voice
-session clear them.
+session clear them. `public/ui.js` may display only the five latest receipts
+as a read-only projection; never create a second UI-owned activity store, and
+render receipt strings as text rather than HTML.
 
 When adding a tool:
 
@@ -240,6 +249,14 @@ confirmation, a negative cancels it, and the dedicated no-argument confirmation
 tool consumes the exact stored action once. It
 does not permit forms, arbitrary evaluation, downloads, uploads, or arbitrary
 MCP forwarding.
+
+Contextual result ordinals are deliberately narrower than raw page refs. The
+browser stores at most five ordinary links from the latest successful
+read/find, discards links with consequential wording, and retains only labels
+the user actually heard in the completed agent response. A new read/find
+replaces the list immediately; page-changing actions, interruption,
+disconnect, and a new session clear it. Never make hidden or merely observed
+links eligible for “first/second/etc.” follow-ups.
 
 Install Playwright's managed Chromium before a live browser run:
 
