@@ -135,6 +135,9 @@ matching implementation:
   Google Calendar with server-side OAuth.
 - `ask_codex` calls the local Codex route, which starts the local read-only
   Codex CLI.
+- `browser_search_web` normalizes one bounded public-web query, navigates the
+  controlled browser to a fixed DuckDuckGo HTML search URL, then takes the same
+  bounded page snapshot used by `browser_read_page`. It adds no new MCP action.
 - `browser_navigate`, `browser_read_page`, `browser_find_on_page`,
   `browser_go_back`, `browser_click`, and `browser_type` call the local browser
   route. Its backend adapter owns a lazy, reused Playwright MCP connection and
@@ -251,9 +254,10 @@ does not permit forms, arbitrary evaluation, downloads, uploads, or arbitrary
 MCP forwarding.
 
 Contextual result ordinals are deliberately narrower than raw page refs. The
-browser stores at most five ordinary links from the latest successful
-read/find, discards links with consequential wording, and retains only labels
-the user actually heard in the completed agent response. A new read/find
+browser inspects at most twenty ordinary links from the latest successful
+read/find/search snapshot, discards links with consequential wording, and
+retains at most five labels the user actually heard in the completed agent
+response. A new read/find
 replaces the list immediately; page-changing actions, interruption,
 disconnect, and a new session clear it. Never make hidden or merely observed
 links eligible for “first/second/etc.” follow-ups.
