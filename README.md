@@ -53,8 +53,10 @@ Codex CLI to inspect the current project.
   receipts contain concise safe summaries, not source contents, patches,
   transcripts, credentials, or absolute paths. The page also shows the latest
   five receipts in a compact Activity panel as a read-only projection of the
-  same ledger. Pause/resume preserves them; disconnect and the next new session
-  clear them.
+  same ledger. If a newer turn supersedes or interrupts still-running tracked
+  work, its receipt is terminalized before the late result is discarded so the
+  Activity panel cannot remain stuck on “running.” Pause/resume preserves
+  receipts; disconnect and the next new session clear them.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
