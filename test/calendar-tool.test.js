@@ -56,12 +56,11 @@ test("returns the existing Calendar network failure result shape", async () => {
       error: "Network unavailable",
     });
   });
+});
 
-  test("returns the existing Calendar missing-time failure result shape", async () => {
+test("returns the existing Calendar missing-time failure result shape", async () => {
   assert.deepEqual(await getCalendarEvents(""), {
     success: false,
     error: "Calendar time period is required.",
   });
-});
-
 });

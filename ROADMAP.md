@@ -64,6 +64,8 @@ activity is client-owned context and natural AssemblyAI barge-in is intentional.
 
 ### 1. Deterministic developer workspace
 
+**Status: implemented; live device acceptance still required where applicable.**
+
 Build read-only Git status and changed-file inspection, bounded project file
 search and read, a configured test command, structured test-failure summaries,
 and validated VS Code project/file opening. Never permit arbitrary spoken shell
@@ -71,11 +73,17 @@ execution. Use Codex only for reasoning handoffs such as “why did this fail?�
 
 ### 2. Contextual follow-ups
 
+**Status: substantially implemented for project files, recent commits, and
+spoken browser link results; stale-state regression coverage is in CI.**
+
 Support bounded references such as “open that file,” “which test failed?,” “run
 those tests again,” and “read that result.” References must expire or clear
 safely when stale, and stale session or tool state must not mutate active work.
 
 ### 3. Gmail read-only
+
+**Status: not implemented. This remains the main P0 integration requiring a
+separate private-data/OAuth decision. Gmail currently opens only as a website.**
 
 Add recent, unread, and important message listing; sender, subject, and basic
 query search; message/thread reading; and thread summaries. Do not add send,
@@ -84,11 +92,19 @@ beyond read-only without explicit approval.
 
 ### 4. Higher-level web research
 
+**Status: implemented for the LOCAL demo with fixed-provider public-web search,
+bounded snapshots, validated browser actions, and spoken ordinal result
+opening; live search quality still needs manual acceptance.**
+
 Build on the existing controlled browser foundation to search the web, inspect
 results, and open/read relevant results. Support bounded references such as
 “open the second result.” Do not claim arbitrary-site reliability.
 
 ### 5. Combined standout workflow
+
+**Status: automated smoke coverage exists for developer state → web search →
+Calendar → session evidence → contextual browser opening. Gmail remains absent,
+so the full planned cross-domain story is not yet complete. See DEMO.md.**
 
 Combine developer tools, browser research, Calendar, Gmail, and contextual
 follow-ups into one continuous eyes-free work session. Activity questions must
@@ -107,6 +123,11 @@ behavior, stale-state safety, cancellation, confirmation, interruption,
 standby/resume, and demo rehearsal.
 
 ## P1 — Deployment
+
+**Status: hosted-safe route/capability gating and baseline HTTP hardening are
+implemented. Public binding is deliberately still blocked pending a concrete
+token-abuse/rate-limit, trusted-proxy, HTTPS, and origin strategy. See
+docs/DEPLOYMENT.md.**
 
 Hosted-safe mode already exists. After the P0 workflows are strong, complete
 token and public-HTTP security, deployment configuration, and application URL
