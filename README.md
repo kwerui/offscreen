@@ -49,12 +49,21 @@ Codex CLI to inspect the current project.
   in-progress work; ordinary new requests still do.
 - Session action receipts: ask what Offscreen just did, what it has done so far,
   whether a recent action succeeded, or which actions failed. The browser keeps
-  the last 25 completed developer/Codex actions only for the active session;
+  the last 25 bounded action receipts for the active session, including developer/Codex work plus safe Calendar and controlled-browser actions;
   receipts contain concise safe summaries, not source contents, patches,
-  transcripts, credentials, or absolute paths. Pause/resume preserves them;
-  disconnect and the next new session clear them.
+  transcripts, credentials, or absolute paths. The page also shows the latest
+  five receipts in a compact Activity panel as a read-only projection of the
+  same ledger. If a newer turn supersedes or interrupts still-running tracked
+  work, its receipt is terminalized before the late result is discarded so the
+  Activity panel cannot remain stuck on “running.” Pause/resume preserves
+  receipts; disconnect and the next new session clear them.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
+- LOCAL-only controlled browser research: bounded public-web search through a
+  fixed provider, arbitrary explicit http/https navigation, page read/find,
+  history back, validated click/type, and explicit confirmation for
+  consequential actions. Spoken ordinal follow-ups such as “open the second
+  result” can resolve only ordinary links Ivy actually named.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
   natural-language dates, and spoken ordinals. Date interpretation uses the
   primary Calendar timezone.
@@ -79,10 +88,15 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
 
 ## Product direction
 
-Offscreen is building toward safe, stateful voice control: bounded browser
-automation through MCP, deterministic developer-workspace tools, and contextual
-follow-ups. Browser MCP and developer tools are planned, not implemented.
-See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md) and [ROADMAP.md](ROADMAP.md).
+Offscreen provides safe, stateful voice control through bounded browser
+automation via MCP, deterministic developer-workspace tools, and contextual
+follow-ups. Current browser automation is intentionally narrow rather than
+arbitrary: fixed-provider public web search, navigation, page read/find, back,
+validated click/type, explicit confirmation for consequential actions, and
+spoken ordinal link follow-ups.
+See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md), [ROADMAP.md](ROADMAP.md), and
+[DEMO.md](DEMO.md) for the grounded live-demo rehearsal and manual acceptance
+checklist.
 
 ## How it works
 
@@ -115,6 +129,8 @@ keeps AssemblyAI application-event semantics, active session IDs, tool turns,
 session/turn checks, and the decision to supersede an earlier turn.
 `public/session-activity-ledger.js` owns the bounded in-memory receipt ledger
 queried by `get_session_activity`; it is not persisted or sent to the server.
+`public/ui.js` renders only a bounded snapshot of that ledger in the Activity
+panel and never owns activity lifecycle state.
 `public/voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
 connection lifecycle, and raw message transport. `public/codex-call-tracker.js` owns
 Codex interactive-call tracking and explicit supersession/cancellation.
@@ -238,7 +254,11 @@ AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 ## Current limitations
 
 - No email-reading integration; Gmail can only be opened.
-- Browser MCP and general browser automation are planned, not implemented.
+- Browser MCP is local-demo only and intentionally bounded; it is not arbitrary
+  hosted computer control. Public web search uses a fixed DuckDuckGo HTML
+  endpoint and then the existing bounded page snapshot. Contextual “open the
+  second result” follow-ups are limited to at most five ordinary links the user
+  actually heard from the latest page read/find/search response.
 - Deterministic developer workspace tools support Git status, bounded project
   search/read, the configured test suite, and validated project-file opening in
   VS Code; they do not provide arbitrary command execution.

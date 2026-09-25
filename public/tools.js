@@ -176,6 +176,33 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "browser_search_web",
+
+    description:
+      "Search the public web through Offscreen's controlled browser using one bounded text query. " +
+      "Use for requests such as 'search the web for', 'look up online', or 'find web results about'. " +
+      "The client uses a fixed search provider, then reads a bounded page snapshot so result links can " +
+      "be spoken and later selected with browser_open_result. Do not use for private account data, " +
+      "arbitrary URLs, form submission, or write actions.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The public web search query, without a URL or search-engine command.",
+        },
+      },
+      required: ["query"],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
     name: "browser_navigate",
 
     description:
@@ -256,6 +283,35 @@ export const VOICE_TOOLS = [
       type: "object",
       properties: {},
       required: [],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
+    name: "browser_open_result",
+
+    description:
+      "Open one ordinary navigation link from the latest browser result list the user actually heard. " +
+      "Use only for contextual follow-ups such as 'open the second result' or 'open the third link'. " +
+      "The client resolves positions 1 through 5 against a bounded spoken-result context; never provide " +
+      "a URL, selector, ref, button, or other page control. If no eligible spoken result list exists, " +
+      "ask to read or find the page again.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        position: {
+          type: "integer",
+          minimum: 1,
+          maximum: 5,
+          description: "The spoken result position, starting at 1.",
+        },
+      },
+      required: ["position"],
     },
 
     execution_mode: "hold",
@@ -619,11 +675,13 @@ const DEVELOPER_WORKSPACE_TOOL_NAMES = new Set([
   "run_project_tests",
 ]);
 const BROWSER_TOOL_NAMES = new Set([
+  "browser_search_web",
   "browser_navigate",
   "browser_read_page",
   "browser_find_on_page",
   "browser_go_back",
   "browser_click",
+  "browser_open_result",
   "browser_type",
   "browser_confirm_action",
 ]);
