@@ -96,7 +96,8 @@ validated click/type, explicit confirmation for consequential actions, and
 spoken ordinal link follow-ups.
 See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md), [ROADMAP.md](ROADMAP.md), and
 [DEMO.md](DEMO.md) for the grounded live-demo rehearsal and manual acceptance
-checklist, and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the hosted security
+checklist, [SUBMISSION.md](SUBMISSION.md) for the grounded lablab submission
+draft, and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the hosted security
 preflight and remaining public-deployment blockers.
 
 ## How it works
