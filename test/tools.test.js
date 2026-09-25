@@ -4,6 +4,7 @@ import { VOICE_TOOLS } from "../public/tools.js";
 
 test("defines the bounded browser voice tools", () => {
   const browserTools = [
+    ["browser_search_web", ["query"]],
     ["browser_navigate", ["url"]],
     ["browser_read_page", []],
     ["browser_find_on_page", ["text"]],
@@ -20,6 +21,18 @@ test("defines the bounded browser voice tools", () => {
     assert.deepEqual(tool.parameters.required, required);
     assert.equal(tool.execution_mode, "hold");
   }
+});
+
+test("defines a bounded public web search tool", () => {
+  const searchTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "browser_search_web"
+  );
+
+  assert.ok(searchTool);
+  assert.deepEqual(searchTool.parameters.required, ["query"]);
+  assert.match(searchTool.description, /fixed search provider/i);
+  assert.match(searchTool.description, /public web/i);
+  assert.match(searchTool.description, /browser_open_result/i);
 });
 
 test("describes safe ref-only browser interaction", () => {
