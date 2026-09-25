@@ -26,6 +26,7 @@ const LOCAL_ONLY_TOOL_NAMES = [
   "browser_find_on_page",
   "browser_go_back",
   "browser_click",
+  "browser_open_result",
   "browser_type",
   "browser_confirm_action",
 ];
