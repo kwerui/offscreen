@@ -84,8 +84,9 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
 Offscreen provides safe, stateful voice control through bounded browser
 automation via MCP, deterministic developer-workspace tools, and contextual
 follow-ups. Current browser automation is intentionally narrow rather than
-arbitrary: navigation, page read/find, back, validated click/type, explicit
-confirmation for consequential actions, and spoken ordinal link follow-ups.
+arbitrary: fixed-provider public web search, navigation, page read/find, back,
+validated click/type, explicit confirmation for consequential actions, and
+spoken ordinal link follow-ups.
 See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md) and [ROADMAP.md](ROADMAP.md).
 
 ## How it works
@@ -245,9 +246,10 @@ AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 
 - No email-reading integration; Gmail can only be opened.
 - Browser MCP is local-demo only and intentionally bounded; it is not arbitrary
-  hosted computer control. Contextual “open the second result” follow-ups are
-  limited to at most five ordinary links the user actually heard from the latest
-  page read/find response.
+  hosted computer control. Public web search uses a fixed DuckDuckGo HTML
+  endpoint and then the existing bounded page snapshot. Contextual “open the
+  second result” follow-ups are limited to at most five ordinary links the user
+  actually heard from the latest page read/find/search response.
 - Deterministic developer workspace tools support Git status, bounded project
   search/read, the configured test suite, and validated project-file opening in
   VS Code; they do not provide arbitrary command execution.
