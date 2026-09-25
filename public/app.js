@@ -393,7 +393,11 @@ function beginActionReceipt(event, sessionId, toolTurnId) {
     tool: event.name,
     category,
   })) {
-    activityToolCalls.set(event.call_id, event.name);
+    activityToolCalls.set(event.call_id, {
+      tool: event.name,
+      sessionId,
+      toolTurnId,
+    });
     syncActivityReceipts();
   }
 }
@@ -439,8 +443,8 @@ function getActionReceiptSummary(tool, result) {
 }
 
 function completeActionReceipt(callId, result) {
-  const tool = activityToolCalls.get(callId);
-  if (!tool) return;
+  const activity = activityToolCalls.get(callId);
+  if (!activity) return;
 
   sessionActivityLedger.setTarget(callId, {
     path: result?.path,
@@ -448,11 +452,41 @@ function completeActionReceipt(callId, result) {
   });
   const didComplete = sessionActivityLedger.complete(callId, {
     ...result,
-    summary: getActionReceiptSummary(tool, result),
+    summary: getActionReceiptSummary(activity.tool, result),
   });
 
   if (didComplete) {
     activityToolCalls.delete(callId);
+    syncActivityReceipts();
+  }
+}
+
+function finalizeActionReceiptsForTurn(sessionId, toolTurnId, summary) {
+  if (typeof summary !== "string" || !summary) {
+    return;
+  }
+
+  let didChange = false;
+
+  for (const [callId, activity] of activityToolCalls) {
+    if (
+      activity.sessionId !== sessionId ||
+      activity.toolTurnId !== toolTurnId
+    ) {
+      continue;
+    }
+
+    if (sessionActivityLedger.complete(callId, {
+      success: false,
+      cancelled: true,
+      summary,
+    })) {
+      activityToolCalls.delete(callId);
+      didChange = true;
+    }
+  }
+
+  if (didChange) {
     syncActivityReceipts();
   }
 }
@@ -920,7 +954,16 @@ const toolResultCoordinator = createToolResultCoordinator({
   onQueueResult: completeActionReceipt,
 });
 
-function invalidateToolTurn(updateActivityPrompt = true) {
+function invalidateToolTurn(
+  updateActivityPrompt = true,
+  receiptSummary = "The action was superseded before its result could be used."
+) {
+  finalizeActionReceiptsForTurn(
+    activeSessionId,
+    activeToolTurnId,
+    receiptSummary
+  );
+
   activeToolTurnId++;
   pendingDisconnect = null;
   pendingProjectReferenceResultCallId = null;
@@ -952,7 +995,10 @@ function cancelCurrentToolWork(sessionId, toolTurnId, callId) {
   clearPendingBrowserConfirmation(true);
 
   // Advancing the turn drops queued and future results from all old tool work.
-  invalidateToolTurn();
+  invalidateToolTurn(
+    true,
+    "The action was cancelled before its result could be used."
+  );
 
   // The cancellation tool itself acknowledges on the newly active turn.
   toolResultCoordinator.queueResult(
@@ -1320,7 +1366,10 @@ function handleEvent(event, sessionId) {
         flushPlayback();
 
         interruptedToolTurnIds.add(activeToolTurnId);
-        invalidateToolTurn();
+        invalidateToolTurn(
+          true,
+          "The action was interrupted before its result could be used."
+        );
       } else {
         if (pendingAgentResponse?.trim()) {
           projectReferenceContext?.alignPendingSearchResult(pendingAgentResponse);
@@ -2202,7 +2251,7 @@ function teardown(
   restartVoiceWake = true
 ) {
   clearPendingBrowserConfirmation(true);
-  invalidateToolTurn(false);
+  invalidateToolTurn(false, null);
   interruptedToolTurnIds.clear();
   codexCallTracker.clear();
   projectTestCallTracker.clear();
