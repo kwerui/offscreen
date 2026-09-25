@@ -70,12 +70,14 @@ Keep spoken responses brief and natural.
 
 BROWSER TOOL ROUTING — REQUIRED
 
+If the user asks to search the web, search online, look something up online, or find public web results about a topic, ALWAYS use browser_search_web with the user's actual search terms. browser_search_web uses a fixed provider and returns a bounded page snapshot; present the most relevant returned link names so the user can use first/second/etc. follow-ups.
 If the user asks to navigate, go, open, or browse to an arbitrary explicit domain or URL, ALWAYS use browser_navigate immediately.
 Plain domains such as wikipedia.org, example.com, and github.com are valid; do not require the user to say https://.
 Do not claim arbitrary websites are unsupported when browser_navigate can handle them.
 
 Use browser_read_page to inspect or read the current page.
 Use browser_find_on_page to locate text or elements on the current page.
+For a contextual follow-up such as “open the second result”, “open the third link”, or “open the first one”, ALWAYS use browser_open_result with only the spoken position. browser_open_result can resolve only ordinary navigation links from the latest browser read/find list that the user actually heard. Never invent, copy, or guess a raw ref for an ordinal follow-up. If browser_open_result says no eligible spoken result is available, read or find the page again and present the relevant link names before the user chooses.
 Use browser_click for explicit click requests using observed refs.
 Use browser_type only for explicit typing requests using observed refs.
 Typing must not submit or press Enter.
@@ -91,6 +93,9 @@ open_website is only a convenience shortcut for its small predefined site list; 
 
 Examples:
 
+User: "Search the web for AssemblyAI voice agents"
+→ call browser_search_web with query = "AssemblyAI voice agents"
+
 User: "Navigate to wikipedia.org"
 → immediately call browser_navigate with url = "wikipedia.org"
 
@@ -99,6 +104,9 @@ User: "Read this page"
 
 User: "Find the search box"
 → call browser_find_on_page
+
+User: "Open the second result"
+→ call browser_open_result with position = 2
 
 You can access the user's real Google Calendar using get_calendar_events.
 
@@ -345,6 +353,19 @@ After the tool returns, summarize its result briefly.
         Calendar, local developer-workspace inspection, local Codex inspection, and controlled-browser actions are
         available only in the local developer demo.
       </p>
+
+      <section class="activity-panel" aria-labelledby="activity-heading">
+        <div class="activity-header">
+          <div>
+            <h2 id="activity-heading">Activity</h2>
+            <p>Verified actions from this voice session. Latest first.</p>
+          </div>
+          <span id="activity-count">0 actions</span>
+        </div>
+        <div class="activity-list" id="activity-list" aria-live="polite">
+          <div class="activity-empty">No actions yet in this session.</div>
+        </div>
+      </section>
 
       <div class="transcript" id="transcript">
         <div class="empty" id="empty">

@@ -101,7 +101,8 @@ test("does not repeat a denied project file opening backend attempt within one u
     globalThis.WebSocket = originalWebSocket;
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
-    Object.defineProperty(globalThis, "navigator", originalNavigator);
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originalAudioWorkletNode;
     globalThis.__OFFSCREEN_CAPABILITIES__ = originalCapabilities;
   }
