@@ -59,6 +59,11 @@ Codex CLI to inspect the current project.
   receipts; disconnect and the next new session clear them.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
+- LOCAL-only controlled browser research: bounded public-web search through a
+  fixed provider, arbitrary explicit http/https navigation, page read/find,
+  history back, validated click/type, and explicit confirmation for
+  consequential actions. Spoken ordinal follow-ups such as “open the second
+  result” can resolve only ordinary links Ivy actually named.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
   natural-language dates, and spoken ordinals. Date interpretation uses the
   primary Calendar timezone.
@@ -89,7 +94,9 @@ follow-ups. Current browser automation is intentionally narrow rather than
 arbitrary: fixed-provider public web search, navigation, page read/find, back,
 validated click/type, explicit confirmation for consequential actions, and
 spoken ordinal link follow-ups.
-See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md) and [ROADMAP.md](ROADMAP.md).
+See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md), [ROADMAP.md](ROADMAP.md), and
+[DEMO.md](DEMO.md) for the grounded live-demo rehearsal and manual acceptance
+checklist.
 
 ## How it works
 
