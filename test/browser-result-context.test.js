@@ -9,6 +9,7 @@ test("extracts only bounded ordinary links from browser output", () => {
   const content = [
     '- link "Alpha" [ref=e1]',
     '- button "Delete" [ref=e2]',
+    '- link "Transfer funds" [ref=e8]',
     '- link "Beta" [ref=f1e3]',
     '- link "Alpha duplicate ref" [ref=e1]',
     '- link "Gamma" [ref=e4]',
