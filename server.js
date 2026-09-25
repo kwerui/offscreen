@@ -512,6 +512,22 @@ app.post("/api/developer/tests", async (_req, res) => {
 });
 }
 
+app.use((error, _req, res, next) => {
+  if (error?.type === "entity.too.large") {
+    return res.status(413).json({ error: "Request body is too large" });
+  }
+
+  if (
+    error instanceof SyntaxError &&
+    error.status === 400 &&
+    Object.hasOwn(error, "body")
+  ) {
+    return res.status(400).json({ error: "Invalid JSON request body" });
+  }
+
+  next(error);
+});
+
   return app;
 }
 
