@@ -64,6 +64,9 @@ docs/                     Project documentation
 `server.js` starts Express, serves `public/`, and reads the AssemblyAI API key
 from the server environment. It currently owns several different concerns:
 
+- server middleware disables Express fingerprinting, applies conservative
+  response headers, marks API responses no-store, caps JSON bodies at 16 KB,
+  and normalizes parser failures;
 - `GET /api/voice-token` mints a short-lived AssemblyAI token for the browser;
 - Calendar HTTP routes validate requests and call `calendar.js`;
 - the Calendar query route validates input, calls `calendar-query.js`, and
