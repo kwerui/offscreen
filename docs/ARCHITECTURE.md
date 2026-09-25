@@ -40,6 +40,8 @@ public/
   codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
   tool-result-coordinator.js  Generic tool-result queue/task coordination
   session-activity-ledger.js  Bounded session-local completed-action receipts
+  browser-result-context.js  Spoken-only bounded browser link references
+  browser-search.js        Fixed-provider bounded web search request builder
   audio.js                Microphone capture and PCM playback
   tools.js                Static AssemblyAI tool definitions
   website-tool.js         Supported website execution
@@ -51,7 +53,6 @@ public/
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
-offscreen.zip             Tracked release/archive artifact
 docs/                     Project documentation
 ```
 
@@ -62,6 +63,9 @@ docs/                     Project documentation
 `server.js` starts Express, serves `public/`, and reads the AssemblyAI API key
 from the server environment. It currently owns several different concerns:
 
+- server middleware disables Express fingerprinting, applies conservative
+  response headers, marks API responses no-store, caps JSON bodies at 16 KB,
+  and normalizes parser failures;
 - `GET /api/voice-token` mints a short-lived AssemblyAI token for the browser;
 - Calendar HTTP routes validate requests and call `calendar.js`;
 - the Calendar query route validates input, calls `calendar-query.js`, and
@@ -92,8 +96,8 @@ server/local machine and are not sent to the browser.
 `styles.css` contains page styles.
 
 `ui.js` owns DOM lookup and presentation, including status, transcript
-rendering, partial user transcript state, control bindings, and tool-status
-bubbles.
+rendering, partial user transcript state, control bindings, tool-status
+bubbles, and the read-only Activity receipt panel.
 
 `audio.js` owns microphone capture, AudioWorklet setup, PCM encoding and
 playback, interruption, and audio cleanup.
@@ -106,16 +110,27 @@ It does not know about UI, tool names, tool turns, active session IDs, or
 event meaning.
 
 `session-activity-ledger.js` is the browser-owned, bounded evidence layer for
-meaningful completed actions. `app.js` starts receipts only for trackable
-developer/Codex calls and the existing tool-result coordinator completes them
+meaningful completed actions. `app.js` starts receipts only for an explicit
+trackable set: developer/Codex calls plus safe Calendar and controlled-browser
+operations. The existing tool-result coordinator completes them
 only when a result belongs to the active session/turn. Existing interactive
 trackers resolve cancellation with the original call ID, so cancelled work is
 recorded as cancelled rather than successful. The ledger retains at most 25
 receipts, excludes raw contents, patches, prompts, transcripts, absolute paths,
 and secrets, and is cleared on disconnect/new session but not pause/resume.
-`get_session_activity` reads this local ledger with only `all`/`failed` filters
+Before a tool turn is invalidated, `app.js` terminalizes any still-running
+receipts owned by that exact session/turn as cancelled with a bounded internal
+superseded/interrupted/cancelled summary. The later stale tool result remains
+discarded and cannot overwrite that terminal receipt. `get_session_activity`
+reads this local ledger with only `all`/`failed` filters
 and a 1–10 result limit; it is available in hosted mode but can report only
-actions actually available there.
+actions actually available there. Initial `browser_click` requests are intentionally
+not receipts because a consequential click may only create a pending confirmation;
+`browser_confirm_action` is receipt-eligible when the confirmed action actually runs. The visible Activity panel renders at most
+the five latest receipts from this same ledger, newest first. It is a
+presentation-only projection: it cannot create, complete, cancel, or otherwise
+mutate receipt lifecycle state, and receipt text is inserted via DOM
+`textContent` rather than HTML.
 
 `wake-listener.js` owns bounded browser `SpeechRecognition`/
 `webkitSpeechRecognition` phrase listening. The disconnected wake listener
@@ -210,6 +225,25 @@ actions and confirmation control requests. It calls the local browser endpoint
 and returns normalized results; it does not know about MCP, AssemblyAI sessions,
 tool turns, or result queues.
 
+`browser-result-context.js` owns the client-side authority for contextual
+browser ordinals such as “open the second result.” A successful page read/find
+extracts at most five ordinary navigation links from the current observed refs;
+links with consequential action wording are excluded. The context becomes
+eligible only after the tool result was actually sent and the agent's completed
+spoken response contains the exact link label. Ordinal order follows spoken
+order, not hidden page order. A fresh page read/find replaces prior authority,
+and navigation/page-changing actions, interruption, disconnect, or a new
+session clear it. The dedicated `browser_open_result` tool accepts only a
+position and reuses the existing validated click adapter; it cannot accept a
+URL, selector, or raw ref.
+
+`browser-search.js` validates and normalizes one bounded public-web query and
+builds only the fixed HTTPS DuckDuckGo HTML search URL. `browser_search_web`
+does not add a backend MCP action: `app.js` composes the existing
+`navigate` then `snapshot` operations, returns only the normalized query and
+bounded snapshot content, and registers those snapshot links with the same
+spoken-result context.
+
 ### `browser-mcp.js`
 
 `browser-mcp.js` owns the backend Playwright MCP connection and the one pending
@@ -273,12 +307,12 @@ important month-boundary cases.
 This Node built-in test suite mocks `fetch` to protect the existing Calendar
 request URL and success, HTTP-failure, and network-failure result shapes.
 
-### `offscreen.zip`
+### Release archives
 
-This is an archive artifact, not application code. The audit found that its
-copies of `server.js` and `public/index.html` differ from the current tracked
-source, so it must be regenerated from the exact release commit before
-submission.
+Release ZIPs are generated artifacts, not application source. Root-level ZIP
+files are ignored and must not be committed. For a submission artifact, create
+the archive from the exact reviewed release commit (for example with
+`git archive`) so the repository commit remains the single source of truth.
 
 ## Current request and data flow
 
@@ -468,7 +502,7 @@ These are audit findings, not evidence that every path currently fails.
   wake, standby, disconnect, repeat/summarize, current-activity, Codex-call,
   and tool-result lifecycle behavior. Real integrations still need manual
   verification.
-- `offscreen.zip` is stale and must not be trusted as a release artifact.
+- Release archives are not tracked; generate any submission ZIP from the exact reviewed release commit.
 
 ## Proposed target architecture
 

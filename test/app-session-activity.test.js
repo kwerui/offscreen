@@ -16,7 +16,7 @@ function createElement() {
     addEventListener(type, listener) { this.listeners ??= {}; this.listeners[type] = listener; },
     appendChild(child) { child.parentNode = this; this.children ??= []; this.children.push(child); return child; },
     children: [], classList: { remove() {} }, disabled: false, hidden: true, parentNode: null,
-    remove() {}, scrollHeight: 0, scrollTop: 0, textContent: "", value: "",
+    remove() {}, replaceChildren(...children) { this.children = children; for (const child of children) child.parentNode = this; }, scrollHeight: 0, scrollTop: 0, textContent: "", value: "",
   };
 }
 
@@ -31,7 +31,7 @@ test("reports completed deterministic actions and clears them for a new session"
 
   try {
     const elements = new Map();
-    for (const id of ["connect", "disconnect", "voice-wake", "resume-listening", "clear", "voice", "prompt", "greeting", "transcript", "empty", "status-dot", "status-text", "hosted-demo-notice"]) elements.set(id, createElement());
+    for (const id of ["connect", "disconnect", "voice-wake", "resume-listening", "clear", "voice", "prompt", "greeting", "transcript", "empty", "status-dot", "status-text", "hosted-demo-notice", "activity-list", "activity-count"]) elements.set(id, createElement());
     elements.get("empty").parentNode = elements.get("transcript");
     globalThis.document = { createElement, getElementById: (id) => elements.get(id) };
     globalThis.window = { AudioContext: class { constructor() { this.audioWorklet = { addModule: async () => {} }; this.currentTime = 0; } close() {} createMediaStreamSource() { return { connect() {}, disconnect() {} }; } } };
@@ -42,6 +42,8 @@ test("reports completed deterministic actions and clears them for a new session"
     globalThis.fetch = async (url) => {
       if (url === "/api/voice-token") return { ok: true, json: async () => ({ token: "test-token" }) };
       if (url === "/api/developer/git-status") return { ok: true, json: async () => ({ success: true, staged: [{ path: "public/app.js" }], unstaged: [], untracked: [] }) };
+      if (url === "/api/calendar/query?when=today") return { ok: true, json: async () => ({ timezone: "UTC", events: [{ title: "One" }, { title: "Two" }] }) };
+      if (url === "/api/browser") return { ok: true, json: async () => ({ success: true, content: '- link "AssemblyAI" [ref=e1]' }) };
       throw new Error(`Unexpected request: ${url}`);
     };
 
@@ -53,23 +55,64 @@ test("reports completed deterministic actions and clears them for a new session"
     socket.receive({ type: "tool.call", name: "get_git_status", call_id: "status", arguments: {} });
     socket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
-    socket.receive({ type: "transcript.user", text: "What did you just do?" });
-    socket.receive({ type: "tool.call", name: "get_session_activity", call_id: "activity", arguments: { limit: 1 } });
+
+    assert.equal(elements.get("activity-count").textContent, "1 recent");
+    assert.equal(elements.get("activity-list").children.length, 1);
+    assert.equal(
+      elements.get("activity-list").children[0].children[1].children[0].textContent,
+      "Checked Git status: 1 changed files."
+    );
+
+    socket.receive({ type: "transcript.user", text: "What do I have today?" });
+    socket.receive({ type: "tool.call", name: "get_calendar_events", call_id: "calendar", arguments: { when: "today" } });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    socket.receive({ type: "transcript.user", text: "Read this page." });
+    socket.receive({ type: "tool.call", name: "browser_read_page", call_id: "browser", arguments: {} });
+    socket.receive({ type: "reply.done", status: "completed" });
+    await flushPromises();
+
+    assert.equal(elements.get("activity-count").textContent, "3 recent");
+    assert.equal(
+      elements.get("activity-list").children[0].children[1].children[0].textContent,
+      "Read the current browser page."
+    );
+
+    socket.receive({ type: "transcript.user", text: "What have you done so far?" });
+    socket.receive({ type: "tool.call", name: "get_session_activity", call_id: "activity", arguments: { limit: 5 } });
     socket.receive({ type: "reply.done", status: "completed" });
     await flushPromises();
 
     const activityResult = socket.sentMessages.find((message) => message.call_id === "activity");
-    assert.deepEqual(JSON.parse(activityResult.result).receipts, [{
-      sequence: 1,
-      tool: "get_git_status",
-      status: "success",
-      summary: "Checked Git status: 1 changed files.",
-      target: {},
-    }]);
+    assert.deepEqual(JSON.parse(activityResult.result).receipts, [
+      {
+        sequence: 1,
+        tool: "get_git_status",
+        status: "success",
+        summary: "Checked Git status: 1 changed files.",
+        target: {},
+      },
+      {
+        sequence: 2,
+        tool: "get_calendar_events",
+        status: "success",
+        summary: "Checked Calendar: 2 events.",
+        target: {},
+      },
+      {
+        sequence: 3,
+        tool: "browser_read_page",
+        status: "success",
+        summary: "Read the current browser page.",
+        target: {},
+      },
+    ]);
   } finally {
     globalThis.fetch = originals.fetch; globalThis.WebSocket = originals.WebSocket;
     globalThis.document = originals.document; globalThis.window = originals.window;
-    Object.defineProperty(globalThis, "navigator", originals.navigator);
+    if (originals.navigator) Object.defineProperty(globalThis, "navigator", originals.navigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originals.AudioWorkletNode;
     globalThis.__OFFSCREEN_CAPABILITIES__ = originals.capabilities;
   }
