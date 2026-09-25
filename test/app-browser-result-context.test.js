@@ -139,9 +139,9 @@ test("opens only a numbered browser link the user actually heard", async () => {
     globalThis.WebSocket = FakeWebSocket;
     globalThis.__OFFSCREEN_CAPABILITIES__ = {
       isHostedDemo: false,
-      calendar: false,
-      codex: false,
-      developerWorkspace: false,
+      calendar: true,
+      codex: true,
+      developerWorkspace: true,
       browserControl: true,
     };
 
