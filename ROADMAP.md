@@ -137,6 +137,11 @@ hosted public browser automation.
 
 ## P2 — Submission assets
 
+**Status: a grounded lablab submission copy pack, video outline, slide outline,
+cover-image brief, and final checklist are drafted in SUBMISSION.md. Real video,
+cover image, presentation link, screenshots, and any tested application URL
+remain to be produced.**
+
 Prepare README polish, video, slides, cover image, screenshots,
 title/descriptions/tags, public repository/default branch, and final
 application URL. Acceptance: assets and public claims match the actual product,
