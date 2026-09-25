@@ -265,6 +265,35 @@ export const VOICE_TOOLS = [
   {
     type: "function",
 
+    name: "browser_open_result",
+
+    description:
+      "Open one ordinary navigation link from the latest browser result list the user actually heard. " +
+      "Use only for contextual follow-ups such as 'open the second result' or 'open the third link'. " +
+      "The client resolves positions 1 through 5 against a bounded spoken-result context; never provide " +
+      "a URL, selector, ref, button, or other page control. If no eligible spoken result list exists, " +
+      "ask to read or find the page again.",
+
+    parameters: {
+      type: "object",
+      properties: {
+        position: {
+          type: "integer",
+          minimum: 1,
+          maximum: 5,
+          description: "The spoken result position, starting at 1.",
+        },
+      },
+      required: ["position"],
+    },
+
+    execution_mode: "hold",
+    timeout_seconds: 30,
+  },
+
+  {
+    type: "function",
+
     name: "browser_click",
 
     description:
@@ -624,6 +653,7 @@ const BROWSER_TOOL_NAMES = new Set([
   "browser_find_on_page",
   "browser_go_back",
   "browser_click",
+  "browser_open_result",
   "browser_type",
   "browser_confirm_action",
 ]);
