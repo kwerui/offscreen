@@ -42,6 +42,7 @@ import {
 import { runProjectTests } from "./project-tests-tool.js";
 import { createProjectReferenceContext } from "./project-reference-context.js";
 import { createCommitReferenceContext } from "./commit-reference-context.js";
+import { createBrowserReferenceContext } from "./browser-reference-context.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import {
@@ -102,9 +103,13 @@ const projectReferenceContext = capabilities.developerWorkspace
 const commitReferenceContext = capabilities.developerWorkspace
   ? createCommitReferenceContext()
   : null;
+const browserReferenceContext = capabilities.browserControl
+  ? createBrowserReferenceContext()
+  : null;
 
 let pendingProjectReferenceResultCallId = null;
 let pendingCommitReferenceResultCallId = null;
+let pendingBrowserReferenceResultCallId = null;
 let pendingBrowserConfirmation = null;
 
 const EXPLICIT_CONFIRMATION_RESPONSES = new Set([
@@ -349,6 +354,13 @@ function resolveProjectToolArguments(event) {
     arguments: event.arguments,
     userText: latestCompletedUserTurn?.text,
   }) ?? { success: true, arguments: event.arguments ?? {} };
+}
+
+function resolveBrowserClickArguments(event) {
+  return browserReferenceContext?.resolve({
+    target: event.arguments?.target,
+    userText: latestCompletedUserTurn?.text,
+  }) ?? { success: true, arguments: { target: event.arguments?.target } };
 }
 
 const ACTIVITY_TOOL_CATEGORIES = new Map([
@@ -870,6 +882,10 @@ const toolResultCoordinator = createToolResultCoordinator({
         commitReferenceContext?.markPendingHistoryReady();
         pendingCommitReferenceResultCallId = null;
       }
+      if (callId === pendingBrowserReferenceResultCallId) {
+        browserReferenceContext?.markPendingPageResultReady();
+        pendingBrowserReferenceResultCallId = null;
+      }
 
       codexCallTracker.resolveCall(callId);
       projectTestCallTracker.resolveCall(callId);
@@ -888,8 +904,10 @@ function invalidateToolTurn(updateActivityPrompt = true) {
   pendingDisconnect = null;
   pendingProjectReferenceResultCallId = null;
   pendingCommitReferenceResultCallId = null;
+  pendingBrowserReferenceResultCallId = null;
   projectReferenceContext?.discardPendingSearchResult();
   commitReferenceContext?.discardPendingHistory();
+  browserReferenceContext?.discardPendingPageResult();
   toolResultCoordinator.reset();
   clearToolStatus();
   clearActivities(updateActivityPrompt);
@@ -1283,6 +1301,7 @@ function handleEvent(event, sessionId) {
         if (pendingAgentResponse?.trim()) {
           projectReferenceContext?.alignPendingSearchResult(pendingAgentResponse);
           commitReferenceContext?.alignPendingHistory(pendingAgentResponse);
+          browserReferenceContext?.alignPendingPageResult(pendingAgentResponse);
           lastCompletedAgentResponse = pendingAgentResponse;
         }
 
@@ -1542,10 +1561,41 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   const browserAction = browserActions[event.name];
 
   if (browserAction) {
+    let browserActionInput = browserAction.input;
+
+    if (event.name === "browser_click") {
+      const resolvedBrowserClick = resolveBrowserClickArguments(event);
+
+      if (!resolvedBrowserClick.success) {
+        toolResultCoordinator.queueResult(
+          sessionId,
+          toolTurnId,
+          event.call_id,
+          resolvedBrowserClick
+        );
+        return;
+      }
+
+      browserActionInput = {
+        ...browserAction.input,
+        ...resolvedBrowserClick.arguments,
+      };
+
+      if (browserActionInput.target !== event.arguments?.target) {
+        // An ordinal resolves from browser-observed state, so do not forward a
+        // model-provided description alongside it.
+        delete browserActionInput.element;
+      }
+    }
+
     if (["navigate", "back", "click", "type"].includes(browserAction.action)) {
       // The backend invalidates its exact stored action synchronously as part
       // of these page-changing operations. Mirror that lifecycle locally.
       clearPendingBrowserConfirmation();
+
+      if (browserAction.action !== "click") {
+        browserReferenceContext?.clear();
+      }
     }
 
     startActivity(
@@ -1558,16 +1608,19 @@ async function handleToolCall(event, sessionId, toolTurnId) {
     try {
       const result = await runBrowserTool(
         browserAction.action,
-        browserAction.input
+        browserActionInput
       );
 
       if (
         result.success &&
-        ["snapshot", "find"].includes(browserAction.action)
+        ["snapshot", "find"].includes(browserAction.action) &&
+        isActiveToolTurn(sessionId, toolTurnId)
       ) {
         // The backend refresh replaces its observed refs and invalidates the
         // stored confirmation. Keep the model-facing state in lockstep.
         clearPendingBrowserConfirmation();
+        browserReferenceContext?.registerPageResult(result);
+        pendingBrowserReferenceResultCallId = event.call_id;
       }
 
       if (result.confirmation_required) {
@@ -1582,6 +1635,10 @@ async function handleToolCall(event, sessionId, toolTurnId) {
           // A stale turn must not leave a server-held action waiting.
           void runBrowserTool("cancel_confirmation");
         }
+      }
+
+      if (browserAction.action === "click" && isActiveToolTurn(sessionId, toolTurnId)) {
+        browserReferenceContext?.clear();
       }
 
       toolResultCoordinator.queueResult(
@@ -2034,9 +2091,11 @@ function teardown(
   projectTestCallTracker.clear();
   projectReferenceContext?.clear();
   commitReferenceContext?.clear();
+  browserReferenceContext?.clear();
   sessionActivityLedger.clear();
   activityToolCalls.clear();
   pendingProjectReferenceResultCallId = null;
+  pendingBrowserReferenceResultCallId = null;
   resetStoredAgentResponses();
   standbyMode = false;
   standbyResumePending = false;

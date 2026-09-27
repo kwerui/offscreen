@@ -53,6 +53,12 @@ Codex CLI to inspect the current project.
   receipts contain concise safe summaries, not source contents, patches,
   transcripts, credentials, or absolute paths. Pause/resume preserves them;
   disconnect and the next new session clear them.
+- Controlled browser research: Offscreen can read a bounded browser page and
+  open a first, second, or third research result only when that exact link was
+  just spoken aloud. A fresh page read, navigation, click, typing, or disconnect
+  clears the reference rather than guessing. An interrupted page read cannot
+  create a late reference. The existing
+  observed-ref and confirmation checks still govern the resulting click.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
@@ -81,7 +87,8 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
 
 Offscreen is building toward safe, stateful voice control: bounded browser
 automation through MCP, deterministic developer-workspace tools, and contextual
-follow-ups. Browser MCP and developer tools are planned, not implemented.
+follow-ups. Browser and developer tools are local-only capabilities with
+deliberate safety boundaries, not general browser automation.
 See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md) and [ROADMAP.md](ROADMAP.md).
 
 ## How it works
@@ -238,7 +245,9 @@ AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 ## Current limitations
 
 - No email-reading integration; Gmail can only be opened.
-- Browser MCP and general browser automation are planned, not implemented.
+- The controlled local browser supports bounded navigation, page reads/finds,
+  observed-ref clicks, and non-submitting typing. It is not general browser
+  automation or a hosted public-browser feature.
 - Deterministic developer workspace tools support Git status, bounded project
   search/read, the configured test suite, and validated project-file opening in
   VS Code; they do not provide arbitrary command execution.

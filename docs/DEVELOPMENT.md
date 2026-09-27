@@ -383,6 +383,18 @@ source of truth.
 
 ## Useful checkpoints
 
+### Browser research follow-ups
+
+1. Read a results page and have Offscreen speak two or three exact link labels.
+2. Ask it to open a numbered result. It should use the spoken order, not the
+   page's hidden order, and the controlled browser should receive the current
+   observed ref only.
+3. Refresh, navigate, type, click, or disconnect before the follow-up.
+   Offscreen should ask for a fresh read rather than reuse a stale result
+   reference. Interrupting a page read must not make its late result eligible.
+4. Verify that any consequential target still asks for an explicit later
+   confirmation; a research ordinal never bypasses confirmation.
+
 Browser console checkpoints currently include:
 
 - AssemblyAI events other than reply-audio frames;

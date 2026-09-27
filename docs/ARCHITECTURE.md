@@ -48,6 +48,7 @@ public/
   git-status-tool.js      Git status HTTP execution
   project-workspace-tool.js  Project search/read HTTP execution
   browser-tool.js         Browser MCP HTTP execution
+  browser-reference-context.js  Spoken browser research-result references
   ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
@@ -210,6 +211,16 @@ actions and confirmation control requests. It calls the local browser endpoint
 and returns normalized results; it does not know about MCP, AssemblyAI sessions,
 tool turns, or result queues.
 
+`browser-reference-context.js` owns the small browser-research follow-up
+state. It extracts at most three observed link labels/refs from a successful
+page read or find result, but retains only the labels actually spoken in the
+completed agent response. It can resolve only an explicit first through third
+result ordinal to that current observed ref. A new page read replaces the
+previous list; navigation, clicks, typing, and teardown clear it. An interrupted
+page read cannot register a late result.
+It never interprets page text as instructions and never supplies a ref that was
+not returned by the controlled browser.
+
 ### `browser-mcp.js`
 
 `browser-mcp.js` owns the backend Playwright MCP connection and the one pending
@@ -242,6 +253,7 @@ does not own the WebSocket, session lifecycle, a tool implementation, or UI.
 - Codex tool-call identification, session/turn checks, and the decision to
   supersede an earlier user turn;
 - bounded browser tool-call identification and activity descriptions;
+- spoken browser research-result alignment and stale-reference clearing;
 - completed user-turn tracking and explicit browser-confirmation gating;
 - website and Calendar tool-call identification;
 - client-owned descriptions of currently running Calendar/Codex work for

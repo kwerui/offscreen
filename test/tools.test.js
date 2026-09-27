@@ -28,8 +28,16 @@ test("describes safe ref-only browser interaction", () => {
   assert.match(clickTool.description, /ref.*browser_read_page|browser_read_page.*ref/i);
   assert.match(clickTool.description, /consequential.*confirmation|confirmation.*consequential/i);
   assert.match(clickTool.description, /never repeat.*failed click.*refreshed/i);
+  assert.match(clickTool.description, /numbered research result.*exact link.*spoken/i);
   assert.match(typeTool.description, /never submits/i);
   assert.match(typeTool.description, /not editable.*read or find/i);
+});
+
+test("describes spoken browser research result follow-ups", () => {
+  const readTool = VOICE_TOOLS.find((tool) => tool.name === "browser_read_page");
+
+  assert.match(readTool.description, /no more than three.*exact link labels/i);
+  assert.match(readTool.description, /spoken labels.*first, second, or third result/i);
 });
 
 test("defines a no-argument browser_confirm_action voice tool", () => {
