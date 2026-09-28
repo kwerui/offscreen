@@ -37,9 +37,11 @@ Suggested voice flow:
 
 3. **Public web research**
    - “Search the web for AssemblyAI voice agents.”
-   - Expected: browser_search_web uses the fixed provider through the
-     controlled browser, reads a bounded snapshot, and names useful result
-     links.
+   - Expected: browser_search_web uses its bounded primary provider through the
+     controlled browser. If the provider presents a challenge or no ordinary
+     links, it tries one bounded fallback before reporting that no usable result
+     is available; it never invents results. It reads a bounded snapshot and
+     names useful result links.
    - Follow with: “Open the second result.”
    - Expected: browser_open_result resolves only against ordinary link labels
      Ivy actually spoke and uses the existing validated click path.

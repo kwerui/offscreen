@@ -65,7 +65,7 @@ async function flushPromises() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("searches through the fixed browser provider and preserves spoken result follow-up", async () => {
+test("falls back from a challenged provider and preserves spoken result follow-up", async () => {
   const originals = {
     fetch: globalThis.fetch,
     WebSocket: globalThis.WebSocket,
@@ -77,6 +77,7 @@ test("searches through the fixed browser provider and preserves spoken result fo
   };
 
   const browserRequests = [];
+  let snapshotCount = 0;
 
   try {
     FakeWebSocket.instances = [];
@@ -164,14 +165,17 @@ test("searches through the fixed browser provider and preserves spoken result fo
         }
 
         if (body.action === "snapshot") {
+          snapshotCount++;
           return {
             ok: true,
             json: async () => ({
               success: true,
-              content: [
+              content: snapshotCount === 1
+                ? "Verify you are human to continue"
+                : [
                 '- link "Search One" [ref=e10]',
                 '- link "Search Two" [ref=e11]',
-              ].join("\n"),
+                ].join("\n"),
             }),
           };
         }
@@ -214,16 +218,22 @@ test("searches through the fixed browser provider and preserves spoken result fo
     assert.deepEqual(JSON.parse(searchResult.result), {
       success: true,
       query: "AssemblyAI voice agents",
+      provider: "Bing",
       content: [
         '- link "Search One" [ref=e10]',
         '- link "Search Two" [ref=e11]',
       ].join("\n"),
     });
 
-    assert.deepEqual(browserRequests.slice(0, 2), [
+    assert.deepEqual(browserRequests.slice(0, 4), [
       {
         action: "navigate",
         url: "https://html.duckduckgo.com/html/?q=AssemblyAI%20voice%20agents",
+      },
+      { action: "snapshot" },
+      {
+        action: "navigate",
+        url: "https://www.bing.com/search?q=AssemblyAI%20voice%20agents",
       },
       { action: "snapshot" },
     ]);

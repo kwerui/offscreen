@@ -15,6 +15,7 @@ Codex CLI to inspect the current project.
 - Voice conversation through the AssemblyAI Voice Agent API.
 - Optional Wake Phrase while disconnected: explicitly enable **Wake Phrase** in
   the UI, then say “Connect Offscreen” to start the normal AssemblyAI session.
+  The explicit preference is retained in browser-local storage when available.
   The browser wake listener stops while Offscreen is connecting or connected
   and starts again after disconnect while the option remains enabled.
 - Natural voice interruption: Voice Agent input uses `interrupt_response: true`,
@@ -60,7 +61,8 @@ Codex CLI to inspect the current project.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
 - LOCAL-only controlled browser research: bounded public-web search through a
-  fixed provider, arbitrary explicit http/https navigation, page read/find,
+  fixed primary provider with one safe fallback when the primary is challenged
+  or returns no ordinary links, arbitrary explicit http/https navigation, page read/find,
   history back, validated click/type, and explicit confirmation for
   consequential actions. Spoken ordinal follow-ups such as “open the second
   result” can resolve only ordinary links Ivy actually named.
@@ -258,6 +260,8 @@ AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 - No email-reading integration; Gmail can only be opened.
 - Browser MCP is local-demo only and intentionally bounded; it is not arbitrary
   hosted computer control. Public web search uses a fixed DuckDuckGo HTML
+  provider with a one-time Bing fallback only for a challenge or no ordinary
+  observed links.
   endpoint and then the existing bounded page snapshot. Contextual “open the
   second result” follow-ups are limited to at most five ordinary links the user
   actually heard from the latest page read/find/search response.

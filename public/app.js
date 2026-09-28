@@ -44,7 +44,10 @@ import { runProjectTests } from "./project-tests-tool.js";
 import { createProjectReferenceContext } from "./project-reference-context.js";
 import { createCommitReferenceContext } from "./commit-reference-context.js";
 import { createBrowserResultContext } from "./browser-result-context.js";
-import { createWebSearchRequest } from "./browser-search.js";
+import {
+  createWebSearchRequests,
+  shouldTryWebSearchFallback,
+} from "./browser-search.js";
 import { runCodexTask } from "./codex-tool.js";
 import { runBrowserTool } from "./browser-tool.js";
 import {
@@ -55,6 +58,7 @@ import { createToolResultCoordinator } from "./tool-result-coordinator.js";
 import { createSessionActivityLedger } from "./session-activity-ledger.js";
 import { createVoiceSession } from "./voice-session.js";
 import { createPhraseListener, createWakeListener } from "./wake-listener.js";
+import { loadWakePreference, saveWakePreference } from "./wake-preference.js";
 
 const capabilities = getRuntimeCapabilities(
   globalThis.__OFFSCREEN_CAPABILITIES__
@@ -65,7 +69,7 @@ let activeSessionId = 0;
 
 let standbyMode = false;
 
-let voiceWakeEnabled = false;
+let voiceWakeEnabled = loadWakePreference();
 
 let normalSystemPrompt = "";
 
@@ -863,6 +867,7 @@ function setVoiceWakePreference(enabled) {
   }
 
   voiceWakeEnabled = enabled;
+  saveWakePreference(enabled);
   updateVoiceWakeButton();
 
   if (!enabled) {
@@ -1593,14 +1598,14 @@ async function handleToolCall(event, sessionId, toolTurnId) {
   // ---------------------------------
 
   if (event.name === "browser_search_web") {
-    const searchRequest = createWebSearchRequest(event.arguments?.query);
+    const searchRequests = createWebSearchRequests(event.arguments?.query);
 
-    if (!searchRequest.success) {
+    if (!Array.isArray(searchRequests)) {
       toolResultCoordinator.queueResult(
         sessionId,
         toolTurnId,
         event.call_id,
-        searchRequest
+        searchRequests
       );
       return;
     }
@@ -1617,28 +1622,46 @@ async function handleToolCall(event, sessionId, toolTurnId) {
     );
 
     try {
-      const navigationResult = await runBrowserTool("navigate", {
-        url: searchRequest.url,
-      });
+      let result = null;
 
-      if (!navigationResult.success) {
-        toolResultCoordinator.queueResult(
-          sessionId,
-          toolTurnId,
-          event.call_id,
-          navigationResult
-        );
-        return;
+      for (const [index, searchRequest] of searchRequests.entries()) {
+        const navigationResult = await runBrowserTool("navigate", {
+          url: searchRequest.url,
+        });
+
+        if (!navigationResult.success) {
+          result = navigationResult;
+          continue;
+        }
+
+        const snapshotResult = await runBrowserTool("snapshot");
+        if (!snapshotResult.success) {
+          result = snapshotResult;
+          continue;
+        }
+
+        const needsFallback = shouldTryWebSearchFallback(snapshotResult.content);
+
+        if (index < searchRequests.length - 1 && needsFallback) {
+          continue;
+        }
+
+        result = {
+          success: !needsFallback,
+          query: searchRequest.query,
+          provider: searchRequest.provider,
+          content: snapshotResult.content,
+          ...(needsFallback
+            ? { error: "No usable public-web results were available from the configured search providers." }
+            : {}),
+        };
+        break;
       }
 
-      const snapshotResult = await runBrowserTool("snapshot");
-      const result = snapshotResult.success
-        ? {
-            success: true,
-            query: searchRequest.query,
-            content: snapshotResult.content,
-          }
-        : snapshotResult;
+      result ??= {
+        success: false,
+        error: "Public-web search was unavailable from the configured search providers.",
+      };
 
       if (result.success && isActiveToolTurn(sessionId, toolTurnId)) {
         browserResultContext?.registerResult(result.content);

@@ -135,9 +135,11 @@ matching implementation:
   Google Calendar with server-side OAuth.
 - `ask_codex` calls the local Codex route, which starts the local read-only
   Codex CLI.
-- `browser_search_web` normalizes one bounded public-web query, navigates the
-  controlled browser to a fixed DuckDuckGo HTML search URL, then takes the same
-  bounded page snapshot used by `browser_read_page`. It adds no new MCP action.
+- `browser_search_web` normalizes one bounded public-web query, tries the fixed
+  DuckDuckGo HTML URL, then one fixed Bing fallback only if navigation fails or
+  the snapshot signals a challenge/no ordinary links. It takes the same bounded
+  page snapshot used by `browser_read_page`; no usable links is an explicit
+  failure, never an invented result. It adds no new MCP action.
 - `browser_navigate`, `browser_read_page`, `browser_find_on_page`,
   `browser_go_back`, `browser_click`, and `browser_type` call the local browser
   route. Its backend adapter owns a lazy, reused Playwright MCP connection and

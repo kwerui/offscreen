@@ -352,6 +352,11 @@ test("keeps standby client-controlled while unrelated speech and Codex work cont
       success: false,
       error: "Tool calls are unavailable while Offscreen is in standby.",
     });
+    assert.equal(
+      codexFetchCalls,
+      1,
+      "an ordinary tool call received after pause must be rejected before it reaches local work"
+    );
 
     const standbyRecognition = FakeSpeechRecognition.instances.at(-1);
     const bubbleCountBeforeLocalResume = elements.get("transcript").children.length;

@@ -238,8 +238,9 @@ position and reuses the existing validated click adapter; it cannot accept a
 URL, selector, or raw ref.
 
 `browser-search.js` validates and normalizes one bounded public-web query and
-builds only the fixed HTTPS DuckDuckGo HTML search URL. `browser_search_web`
-does not add a backend MCP action: `app.js` composes the existing
+builds only fixed HTTPS DuckDuckGo and Bing search URLs. `browser_search_web`
+tries Bing only after DuckDuckGo fails, presents a challenge, or yields no
+ordinary observed links; it does not add a backend MCP action: `app.js` composes the existing
 `navigate` then `snapshot` operations, returns only the normalized query and
 bounded snapshot content, and registers those snapshot links with the same
 spoken-result context.

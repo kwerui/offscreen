@@ -405,65 +405,135 @@ Suggested copy:
 > microphone, AssemblyAI, Calendar OAuth, and browser integration behavior is
 > separately listed for manual acceptance in DEMO.md.
 
-## Submission checklist
+## Submission requirements audit — 28 September 2026
 
-### Copy
+**Status labels:** **REQUIRED** is confirmed by the public Lablab event or
+submission guide. **READY** means the repository contains a usable draft or
+implementation. **MISSING** means no submission-ready artifact/link was found
+in the reviewed release candidate. **HUMAN ACTION** needs access to the
+Lablab form, GitHub settings, external hosting, or a real device/account; it
+cannot be truthfully completed from this repository.
 
-- [ ] Confirm final project title.
-- [ ] Confirm short description is within the current form limit.
-- [ ] Re-read long description against the release commit.
-- [ ] Select only technologies/tags actually used.
-- [ ] Remove any sentence that depends on a feature that failed final manual
-      acceptance.
+The live event page is the final authority if its authenticated form differs
+from this audit. Do not substitute a recommendation below for a form field.
 
-### Repository
+### Confirmed event and eligibility
 
-- [ ] Final PR stack reconciled/merged into the intended submission branch.
-- [ ] CI green on the exact release commit.
-- [ ] Public repository is accessible to judges.
-- [ ] README setup works from a fresh clone.
-- [ ] No secrets, OAuth files, tokens, or generated ZIPs are tracked.
-- [ ] Release ZIP, if needed, is generated from the exact reviewed commit.
+- **REQUIRED — build on AssemblyAI.** The event says every participant builds
+  on AssemblyAI. **READY:** the README and this document accurately describe
+  use of the AssemblyAI Voice Agent API. **HUMAN ACTION:** retain this clear
+  disclosure in the final project story and select the AssemblyAI technology
+  tag only if it is offered by the form.
+- **REQUIRED — submit by 30 September 2026, 15:00 UTC.** **HUMAN ACTION:**
+  submit before the displayed event deadline; do not rely on this document as
+  a clock or assume a grace period.
+- **REQUIRED — Lablab profile, registration, Discord connection, and team.**
+  The public guide requires a completed profile, event registration, Discord
+  connection, and creating or joining a team; the platform FAQ says every team
+  member must register independently. **HUMAN ACTION:** verify every member is
+  registered, linked to the correct team, and shown in the submitted project.
+- **UNCONFIRMED — event-specific eligibility, originality, team-size limit,
+  tracks, and judging weights.** No public event-specific rulebook or rubric
+  was accessible during this audit. **HUMAN ACTION:** inspect the current
+  authenticated event page/Discord and record any such requirements before
+  submitting. Do not claim a track or judging criterion that is not displayed.
 
-### Demo
+### Required submission fields and media
 
-- [ ] Real microphone + AssemblyAI voice loop verified.
-- [ ] Natural interruption verified.
-- [ ] Git developer flow verified.
-- [ ] Controlled web search verified.
-- [ ] Spoken ordinal result opening verified.
-- [ ] Calendar OAuth/query verified.
-- [ ] Activity receipts verified.
-- [ ] Pause/resume or another eyes-free state-control moment verified.
-- [ ] Disconnect/reconnect verified.
+- **REQUIRED — title (maximum 50 characters). READY:** “Offscreen — Eyes-Free
+  Voice Control for Real Work” is 49 characters. **HUMAN ACTION:** paste it
+  into the live form and confirm its character counter accepts the em dash.
+- **REQUIRED — short description (maximum 255 characters). READY:** the draft
+  above is 171 characters. **HUMAN ACTION:** use the current form counter as
+  final authority.
+- **REQUIRED — long description (minimum 100 words). READY:** the grounded
+  draft above exceeds the minimum and discloses AssemblyAI use, LOCAL-only
+  scope, and safety boundaries. **HUMAN ACTION:** remove any claim that fails
+  final manual acceptance.
+- **REQUIRED — main track(s) and technologies. MISSING:** no selected track
+  or final platform-tag record exists in the repository. **HUMAN ACTION:**
+  select only live form choices that apply; begin with the suggested tags above
+  and include AssemblyAI.
+- **REQUIRED — cover image. MISSING:** no image asset was found. The guide
+  recommends a 16:9 ratio. **HUMAN ACTION:** create/upload a truthful 16:9
+  thumbnail using the cover brief above; do not show private Calendar data,
+  secrets, absolute local paths, or unavailable integrations.
+- **REQUIRED — video presentation. MISSING:** no recorded video or public URL
+  was found. The guide specifies a link, under 300 MB and no longer than five
+  minutes. **HUMAN ACTION:** record the tested LOCAL flow, upload it to a
+  publicly playable service, and paste its URL. The 3:05 script above is a
+  content-ready plan, not a completed video.
+- **REQUIRED — GitHub repository link. READY:**
+  https://github.com/kwerui/offscreen is the configured `origin` and the README
+  provides setup and scope. **HUMAN ACTION:** confirm it is accessible to
+  unauthenticated judges and that the default branch contains or clearly links
+  to the exact release commit. The public guide requires the link but does not
+  itself state “public”; judge accessibility is essential verification, not an
+  invented event rule.
+- **REQUIRED — demo platform and demo URL. MISSING:** both remain `TBD`.
+  **HUMAN ACTION:** either supply a real, tested HTTPS deployment whose public
+  capability surface matches its description, or verify with the live form
+  whether a local-demo/video-only submission is accepted. Never submit
+  localhost or a fabricated URL. `docs/DEPLOYMENT.md` records why a public
+  deployment is not currently ready.
+- **REQUIRED — additional information. READY:** the judge copy above clearly
+  explains the LOCAL versus HOSTED_DEMO boundary. **HUMAN ACTION:** paste and
+  trim it for the form without promising public capabilities that do not exist.
 
-### Media
+### Release, demo, and evidence gate
 
-- [ ] 16:9 cover image.
-- [ ] Video presentation recorded.
-- [ ] Video link publicly accessible.
-- [ ] Slide/presentation link publicly accessible if required by the form.
-- [ ] Screenshots contain no secrets, local absolute paths, or private Calendar
-      information.
+- **REQUIRED — a usable online prototype. MISSING for public access:** the
+  platform FAQ says a complete submission needs a working prototype others can
+  use online, and the submission form guidance includes a demo platform and
+  direct demo URL. The strongest workflow is intentionally LOCAL and the
+  server is loopback-bound. **HUMAN ACTION:** complete the documented
+  hosted-security preflight and publish a truthful HTTPS demo, unless the live
+  authenticated form explicitly provides and accepts an alternative.
+- **READY — repository documentation:** README, DEMO.md, SUBMISSION.md, and
+  deployment preflight exist and distinguish implemented LOCAL behavior from
+  hosted-safe behavior.
+- **MISSING — final manual acceptance record:** microphone/AssemblyAI session,
+  wake phrase, real Calendar query, live search, spoken ordinal open,
+  interruption, pause/resume, receipts, and reconnect still need the final
+  run recorded in DEMO.md or release notes. **HUMAN ACTION:** perform this on
+  the recording machine after the acceptance-blocker fixes land.
+- **MISSING — exact-release CI evidence:** a GitHub Actions test workflow is
+  present, but this audit did not independently obtain a run for the final
+  post-fix commit. **HUMAN ACTION:** confirm `npm test` and GitHub Actions are
+  green on that exact commit before marking PR #10 ready. Keep PR #10 draft
+  until this and manual acceptance pass.
+- **HUMAN ACTION — repository hygiene:** verify a fresh clone starts from the
+  README, the intended submission/default branch is discoverable, no secrets
+  are tracked, and generated `.playwright-mcp/` state remains ignored.
 
-### Hosting
+### Recommended polish (not confirmed event requirements)
 
-- [ ] If providing an Application URL, it is a real tested HTTPS URL.
-- [ ] Public URL exposes only capabilities intended for hosted mode.
-- [ ] Do not list a fake or localhost URL as the public application URL.
+- **MISSING — screenshots.** Capture two or three truthful, redacted product
+  screenshots for the project page/video thumbnail. They improve judge context
+  but the public guide does not list them as a required field.
+- **MISSING — slide deck artifact.** Lablab’s FAQ says a complete hackathon
+  submission needs a pitch deck, while the current event submission guide
+  explicitly requires the fields above and does not expose a deck-upload field.
+  The seven-slide outline above is therefore ready as content, but no deck file
+  is required by the accessible event form. **HUMAN ACTION:** create/export a
+  concise deck only if the authenticated form, organizers, or live judging
+  instructions request it; otherwise use the outline to structure the video.
+- **RECOMMENDED — judging alignment.** Lead the video/story with a working
+  voice-native workflow, explicit AssemblyAI usage, bounded safety, real
+  evidence receipts, and a concrete productivity problem. These are product
+  strengths, not claimed published judging weights.
 
-## Sources for submission format
+## Authoritative sources checked
 
-The current event page identifies the AssemblyAI - Voice Agent Hackathon as the
-September 1–30, 2026 online event:
+- Event page (event identity, AssemblyAI requirement, dates and deadline):
+  https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon
+- Lablab submission guide (field limits, media, repository, demo platform/URL,
+  and additional information):
+  https://lablab.ai/ai-articles/hackathon-guidelines
+- Lablab platform guide/FAQ (registration, team membership, working online
+  prototype, video presentation, pitch deck): https://lablab.ai/guide
 
-https://lablab.ai/ai-hackathons/assemblyai-voice-agent-hackathon
-
-Lablab's current 2026 submission guide describes fields including project title,
-short and long descriptions, technology/category tags, cover image, video,
-GitHub repository, demo platform/URL, and additional information:
-
-https://lablab.ai/ai-articles/hackathon-guidelines
-
-Event-specific form fields can change. Treat the live submission form as the
-final authority before submitting.
+The authenticated submission form and any event-specific rules shown there are
+authoritative over generic platform guidance. No public Devpost page or
+event-specific published judging rubric was found for this Lablab event during
+the audit.
