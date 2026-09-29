@@ -6,13 +6,16 @@ document do not exist yet.
 
 ## Prerequisites
 
-- Node.js 18 or newer (the project declares this minimum version).
+- Node.js 20 or newer (the Playwright MCP dependency requires this minimum).
 - npm.
 - An AssemblyAI account and API key for Voice Agent access.
 - A Google Cloud project with Google Calendar API access for Calendar queries.
 - Local Google OAuth client credentials for the Calendar integration.
 - The Codex CLI installed and available on your `PATH` if you want to use the
   voice-driven Codex tool.
+- The VS Code `code` CLI available on your `PATH` if you want to open validated
+  project files by voice. Offscreen invokes only this fixed CLI with one
+  configured-project text file; it never runs spoken commands.
 - A modern browser with microphone permission available.
 
 ## Installation
@@ -35,13 +38,32 @@ package merely to follow this guide.
    ```
 
 2. Set `ASSEMBLYAI_API_KEY` in `.env` to your own AssemblyAI key.
-3. Do not paste the key into source code, browser developer tools, screenshots,
+3. Leave `OFFSCREEN_MODE` unset or set it to `LOCAL` for complete local
+   development. Set it to the exact value `HOSTED_DEMO` only to exercise the
+   restricted hosted-demo capability surface.
+4. Do not paste the key into source code, browser developer tools, screenshots,
    chat messages, or commits.
-4. Keep Google OAuth client credentials in a local `credentials.json` at the
+5. Keep Google OAuth client credentials in a local `credentials.json` at the
    repository root. The current Calendar code looks for that exact local file.
 
 `.env`, `credentials.json`, and `token.json` must remain untracked. Check with
 `git status` before committing.
+
+For local Codex inspection, untracked status is not a security boundary.
+Offscreen gives the Codex child a small runtime environment allowlist, so
+application secrets loaded by the server are not inherited. It also creates a
+temporary filtered copy of the project directory containing normal source
+files. The copy excludes `.env` files, `credentials.json`, `token.json`, common
+private-key files, symlinks, `.git`, `node_modules`, and archives.
+
+These controls have different limits. The filtered copy reduces accidental
+exposure of repository-local secret files, but Codex read-only mode prevents
+writes; it is not a guarantee that Codex can read only its working directory or
+that it cannot read other host files available to the process. Codex needs its
+own authentication location: on this platform that normally comes from `HOME`
+or a configured `CODEX_HOME`. Prefer the OS keyring for Codex authentication
+when available. Do not copy Codex authentication files into the inspection
+workspace or place application secrets in Codex-related environment variables.
 
 ## Google Calendar OAuth setup (high level)
 
@@ -65,9 +87,10 @@ Run:
 npm start
 ```
 
-The current start command runs `node server.js`. By default the server reports
-a local URL such as `http://localhost:3000`. Open that URL in a browser, choose
-a voice/prompt if desired, then select **Connect** and grant microphone access.
+The current start command runs `node server.js`. The server binds only to
+`127.0.0.1`; by default it reports `http://127.0.0.1:3000`. Open that URL in a
+browser, choose a voice/prompt if desired, then select **Connect** and grant
+microphone access.
 
 ## Tests
 
@@ -78,18 +101,19 @@ npm test
 ```
 
 The project uses Node's built-in test runner; no test framework dependency was
-added. The current suite is in `test/calendar-query.test.js` and covers
-deterministic Calendar-query behavior only. It does not contact AssemblyAI,
-Google Calendar, a microphone, or Codex.
+added. The suite covers Calendar parsing and tool execution plus voice session,
+wake, standby, disconnect, repeat/summarize, current-activity, Codex-call, and
+tool-result and session-activity receipt lifecycle behavior. It does not contact AssemblyAI, Google Calendar,
+a microphone, browser speech recognition, or Codex.
 
 Continue to manually verify integrations when a change affects microphone,
 AssemblyAI, Google Calendar, or Codex behavior.
 
 ## Current application flow
 
-1. The browser requests a temporary AssemblyAI token from the local server.
+1. `voice-session.js` requests a temporary AssemblyAI token from the local server.
 2. The server uses its secret AssemblyAI API key to mint the temporary token.
-3. The browser opens an AssemblyAI Voice Agent WebSocket using that token.
+3. `voice-session.js` opens and owns the AssemblyAI Voice Agent WebSocket using that token.
 4. Once the session is ready, the browser sends the selected voice, greeting,
    system prompt, and tool definitions.
 5. The browser captures microphone audio, converts it to PCM through
@@ -111,6 +135,21 @@ matching implementation:
   Google Calendar with server-side OAuth.
 - `ask_codex` calls the local Codex route, which starts the local read-only
   Codex CLI.
+- `browser_search_web` normalizes one bounded public-web query, tries the fixed
+  DuckDuckGo HTML URL, then one fixed Bing fallback only if navigation fails or
+  the snapshot signals a challenge/no ordinary links. It takes the same bounded
+  page snapshot used by `browser_read_page`; no usable links is an explicit
+  failure, never an invented result. It adds no new MCP action.
+- `browser_navigate`, `browser_read_page`, `browser_find_on_page`,
+  `browser_go_back`, `browser_click`, and `browser_type` call the local browser
+  route. Its backend adapter owns a lazy, reused Playwright MCP connection and
+  exposes only those six backend actions. `browser_open_result` is a client-side
+  contextual wrapper: it resolves positions 1–5 only against ordinary link refs
+  whose labels were returned by the latest read/find result and then actually
+  spoken by the agent, and it reuses the same validated click path. A
+  consequential `browser_click` stores its exact observed target without
+  clicking; `browser_confirm_action` can execute only that stored action after a
+  later explicit affirmative user turn.
 
 The browser packages the outcome as a `tool.result` message for AssemblyAI.
 AssemblyAI then uses that result to speak its answer.
@@ -122,25 +161,61 @@ The current browser sends tool definitions as part of its WebSocket
 description, parameter shape, and timeout. When the model decides a tool is
 needed, it sends the browser a `tool.call` event with a call ID and arguments.
 
-The browser must return a result using the same call ID. A successful result
-and a failed result should both be explicit; never pretend an external action
-succeeded when it did not.
+The browser must return a result using the same `call_id`. Calendar currently
+uses `execution_mode: "hold"`; `ask_codex` uses `execution_mode:
+"interactive"`. A successful result and a failed result should both be
+explicit; never pretend an external action succeeded when it did not.
+
+Each operation also belongs to the active `sessionId` and `toolTurnId`. On a
+new finalized user turn, the browser resolves an earlier interactive Codex
+call as cancelled with that call's original `call_id`; completions that arrive
+after their session or turn becomes stale are ignored.
 
 ## Adding a browser-side tool
 
-The current implementation keeps tool definitions and execution in
-`public/index.html`. Until the proposed frontend split exists, make a small,
-careful change in that file:
+Static AssemblyAI tool definitions live in `public/tools.js`. Supported website
+execution lives in `public/website-tool.js`, Calendar HTTP execution lives in
+`public/calendar-tool.js`, and Codex HTTP execution lives in
+`public/codex-tool.js`.
 
-1. Decide whether the action is truly browser-only. Opening an allowlisted site
-   is browser-only; accessing credentials or an external private API is not.
-2. Add a precise tool definition to the `session.update` tools list: name,
-   description, parameters, required fields, and timeout.
-3. Add a matching branch in `handleToolCall`.
+`public/app.js` continues to receive raw events and dispatch tool execution. It
+owns active session IDs, session/turn protection, and deciding when a new user
+turn supersedes an earlier one. `public/voice-session.js` owns only the
+AssemblyAI connection lifecycle and raw transport. `public/codex-call-tracker.js` owns Codex interactive-call tracking and
+explicit supersession/cancellation. `public/tool-result-coordinator.js`
+coordinates the generic pending-result queue, active tasks, reply-done state,
+and result flushing.
+
+`public/session-activity-ledger.js` stores up to 25 safe, completed action
+receipts for the active browser session. Trackable actions include developer/Codex
+operations plus safe Calendar and controlled-browser actions. Do not record the
+initial `browser_click` request because confirmation-required is not execution;
+record the later `browser_confirm_action` result instead. The `get_session_activity` tool reads
+only this ledger with `filter: "all" | "failed"` and a 1–10 limit. Do not put
+raw source content, patches, prompts, transcripts, secrets, or absolute paths
+in a receipt. A late stale result never reaches the coordinator. If a tracked
+action had already started a running receipt, turn invalidation first
+terminalizes that receipt with an internal cancelled/superseded/interrupted
+summary; the late result cannot mutate it. Existing interactive trackers still
+send their explicit cancellation result with the original call ID when
+applicable. Pause/resume keeps receipts. Disconnect and a new voice
+session clear them. `public/ui.js` may display only the five latest receipts
+as a read-only projection; never create a second UI-owned activity store, and
+render receipt strings as text rather than HTML.
+
+When adding a tool:
+
+1. Add its static definition to `public/tools.js`.
+2. Decide whether the action is truly browser-only.
+3. Put browser-only action logic in a focused module, and keep the matching
+   `handleToolCall` branch in `public/app.js` responsible for passing its
+   result to the tool-result coordinator.
 4. Validate tool arguments before acting.
-5. Push an explicit success or failure object with the incoming `call_id`.
-6. Update the system prompt only when the agent needs routing instructions.
-7. Manually verify success, unsupported/invalid input, and a tool failure.
+5. Return an explicit success or failure result with the incoming `call_id`.
+6. Preserve session/turn isolation. If the tool is interactive and can be
+   superseded, define how its original `call_id` is resolved.
+7. Update the system prompt only when routing instructions are required.
+8. Manually verify success, invalid input, and failure behavior.
 
 Keep the browser allowlist explicit. Do not turn a spoken site name into an
 arbitrary URL without a deliberate security design.
@@ -163,6 +238,122 @@ an external private API.
 
 Before adding Calendar write access, Gmail access, new OAuth scopes, or another
 security-sensitive integration, stop and get explicit approval.
+
+## Adding an MCP capability
+
+MCP is an integration mechanism, not permission to expose an entire server's
+tool catalog to AssemblyAI.
+
+### First browser MCP increment
+
+The Playwright MCP integration runs the locally installed `@playwright/mcp`
+server lazily in a headless, isolated context. It permits only explicit
+http/https navigation, page accessibility snapshots, literal text finding,
+browser history back, and click/type on refs observed in the latest snapshot or
+find output. Typing never submits. Consequential clicks create one short-lived
+pending action. Button-like controls require confirmation unless their observed
+label is in the small low-risk allowlist. The original request is never
+confirmation, a negative cancels it, and the dedicated no-argument confirmation
+tool consumes the exact stored action once. It
+does not permit forms, arbitrary evaluation, downloads, uploads, or arbitrary
+MCP forwarding.
+
+Contextual result ordinals are deliberately narrower than raw page refs. The
+browser inspects at most twenty ordinary links from the latest successful
+read/find/search snapshot, discards links with consequential wording, and
+retains at most five labels the user actually heard in the completed agent
+response. A new read/find
+replaces the list immediately; page-changing actions, interruption,
+disconnect, and a new session clear it. Never make hidden or merely observed
+links eligible for “first/second/etc.” follow-ups.
+
+Install Playwright's managed Chromium before a live browser run:
+
+```bash
+npx playwright install chromium
+```
+
+Treat page and MCP output as untrusted text. For live verification, test a
+valid navigation, a rejected `file:` URL, a snapshot, text finding, back
+navigation, an MCP startup failure, and a late result after disconnect or turn
+supersession.
+
+These tools use `execution_mode: "hold"`. A superseded turn or disconnected
+session ignores its late browser result through the existing session/turn
+guards; this first increment does not terminate an already-running Playwright
+MCP operation when the user cancels work.
+
+1. Write a focused feature specification and choose one user-visible,
+   bounded capability.
+2. Implement an Offscreen adapter that validates inputs and normalizes both
+   success and failure results.
+3. Treat page and MCP output as untrusted data; do not let it choose arbitrary
+   shell, browser, or computer actions.
+4. Define the action's session/turn ownership, cancellation, supersession,
+   stale-completion behavior, and activity description.
+5. Require confirmation immediately before send, submit, delete, purchase,
+   publish, or another consequential action.
+6. Verify normal, invalid-input, failure, cancellation, stale-result, and
+   confirmation paths before expanding the capability.
+
+## Adding a developer tool
+
+Prefer deterministic tools for deterministic work. Limit a tool to read-only
+Git, project-contained file paths, the configured project test command, or
+validated VS Code paths. Never turn speech into an arbitrary shell command.
+Use Codex for reasoning such as test-failure diagnosis, not for predictable
+actions such as Git status, bounded current Git diff inspection, or running
+known tests. Git status, current Git diff, and recent commit history are
+distinct: status reports the working tree, `get_git_diff` reports current
+staged/unstaged content, and `get_git_history` lists only the five most recent
+commits. Commit diffs are LOCAL-only and can inspect only an opaque reference
+created by that latest history response; never accept a spoken hash, revspec,
+branch, tag, range, or Git flag. The fixed Git adapter uses `git log` for
+history and `git show` for one validated immutable commit, with bounded files
+and hunk excerpts. Root commits work; merge detail is deliberately unsupported.
+Opening a changed file opens its current working-tree version, not a historical
+snapshot. Current Git diff inspection is LOCAL-only and fixed to the configured
+project root: it supports only current staged/unstaged changes and an optional
+validated project-relative path, reports untracked paths without reading them,
+and never accepts revisions, arbitrary flags, shell input, or mutating Git
+operations.
+
+## MCP safety and lifecycle verification
+
+Automated checks do not replace real AssemblyAI, microphone, Calendar, Codex,
+or MCP verification. For lifecycle-affecting work, manually test a successful
+call, failure, user cancellation, turn supersession, disconnect/reconnect, and
+the non-superseding current-activity question. Confirm that a late result cannot
+alter the active session, active turn, queue, UI state, or reply.
+
+## Agent workflow
+
+Read `PRODUCT_STRATEGY.md`, `ROADMAP.md`, and the architecture/conventions docs
+before changes. Make one requested change at a time; retain protected voice
+lifecycle behavior; run relevant tests (full `npm test` after non-trivial work),
+`git diff --check`, and review the actual diff. Current local Codex execution
+uses a filtered project copy and read-only mode, but it is **not** host-level
+isolation. Root-level ZIP archives are ignored and must not be used as a source
+of truth. Generate a submission archive only from the exact reviewed release
+commit.
+
+
+## Release artifact
+
+Do not commit ZIP snapshots of the working tree. The Git commit is the release
+source of truth.
+
+After selecting and reviewing the exact submission commit, create a clean
+archive from that commit, for example:
+
+```bash
+git archive --format=zip --output=offscreen.zip <release-commit>
+```
+
+This includes only tracked files from that commit, so ignored local secrets such
+as .env, credentials.json, token.json, node_modules, and local working-tree
+extras are not copied into the archive. Inspect the resulting archive before
+uploading it, and do not add it back to Git.
 
 ## Debugging guide
 

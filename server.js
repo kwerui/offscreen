@@ -17,12 +17,30 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import "dotenv/config";
 import { spawn } from "node:child_process";
-
-const API_KEY = process.env.ASSEMBLYAI_API_KEY;
-if (!API_KEY) {
-  console.error("Missing ASSEMBLYAI_API_KEY in environment. Copy .env.example to .env and add your key.");
-  process.exit(1);
-}
+import { randomUUID } from "node:crypto";
+import {
+  createCodexEnvironment,
+  createCodexInspectionWorkspace,
+  removeCodexInspectionWorkspace,
+} from "./codex-runner.js";
+import {
+  getBrowserResultStatus,
+  runBrowserAction,
+  validateBrowserRequest,
+} from "./browser-mcp.js";
+import {
+  getCapabilities,
+  getClientCapabilities,
+} from "./public/capabilities.js";
+import { getGitStatus } from "./git-status.js";
+import { getGitDiff } from "./git-diff.js";
+import { getCommitDiff, getGitHistory } from "./git-history.js";
+import {
+  readProjectFile,
+  searchProject,
+} from "./project-workspace.js";
+import { openProjectFile } from "./project-vscode.js";
+import { runProjectTests } from "./project-tests.js";
 
 const PORT = process.env.PORT || 3000;
 const HOST = "127.0.0.1";
@@ -33,9 +51,58 @@ const MAX_CODEX_STDOUT_BYTES = 16 * 1024;
 const MAX_CODEX_STDERR_BYTES = 64 * 1024;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const app = express();
 
-app.use(express.json());
+export function createApp({
+  apiKey = process.env.ASSEMBLYAI_API_KEY,
+  mode = process.env.OFFSCREEN_MODE,
+  fetchImpl = globalThis.fetch,
+  gitStatusImpl = getGitStatus,
+  gitDiffImpl = getGitDiff,
+  gitHistoryImpl = getGitHistory,
+  commitDiffImpl = getCommitDiff,
+  projectSearchImpl = searchProject,
+  projectReadFileImpl = readProjectFile,
+  projectOpenFileImpl = openProjectFile,
+  projectWorkspaceRoot = __dirname,
+  projectTestImpl = runProjectTests,
+  projectTestRoot = __dirname,
+} = {}) {
+  if (!apiKey) {
+    throw new Error(
+      "Missing ASSEMBLYAI_API_KEY in environment. Copy .env.example to .env and add your key."
+    );
+  }
+
+  const capabilities = getCapabilities(mode);
+  const clientCapabilities = getClientCapabilities(mode);
+  const app = express();
+
+  app.disable("x-powered-by");
+
+  app.use((_req, res, next) => {
+    res.set("X-Content-Type-Options", "nosniff");
+    res.set("X-Frame-Options", "DENY");
+    res.set("Referrer-Policy", "no-referrer");
+    res.set("Permissions-Policy", "camera=(), geolocation=()");
+    next();
+  });
+
+  app.use("/api", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
+  app.use(express.json({ limit: "16kb", strict: true }));
+
+  // These opaque references are issued only after fixed recent-history
+  // inspection. The browser keeps them out of model-facing tool results.
+  const commitReferences = new Map();
+
+app.get("/api/capabilities.js", (_req, res) => {
+  res.set("Cache-Control", "no-store").type("application/javascript").send(
+    `globalThis.__OFFSCREEN_CAPABILITIES__ = ${JSON.stringify(clientCapabilities)};`
+  );
+});
 
 app.use(express.static(join(__dirname, "public")));
 
@@ -44,13 +111,12 @@ app.get("/api/voice-token", async (_req, res) => {
     const url = new URL("https://agents.assemblyai.com/v1/token");
     url.searchParams.set("expires_in_seconds", String(TOKEN_TTL_SECONDS));
 
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
+    const response = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      console.error(`Token mint failed: ${response.status} ${body}`);
+      console.error(`Token mint failed with status ${response.status}`);
       return res.status(502).json({ error: "Failed to mint token" });
     }
 
@@ -62,6 +128,7 @@ app.get("/api/voice-token", async (_req, res) => {
   }
 });
 
+if (capabilities.calendar) {
 app.get("/api/calendar/events", async (req, res) => {
   try {
     const range = req.query.range || "upcoming";
@@ -163,7 +230,24 @@ app.get("/api/calendar/date", async (req, res) => {
     });
   }
 });
+}
 
+if (capabilities.browserControl) {
+app.post("/api/browser", async (req, res) => {
+  const action = req.body?.action;
+  const validation = validateBrowserRequest(action, req.body);
+
+  if (!validation.success) {
+    return res.status(400).json(validation);
+  }
+
+  const result = await runBrowserAction(action, req.body);
+
+  res.status(getBrowserResultStatus(result)).json(result);
+});
+}
+
+if (capabilities.codex) {
 app.post("/api/codex", async (req, res) => {
   const task = String(req.body?.task || "").trim();
 
@@ -189,6 +273,15 @@ app.post("/api/codex", async (req, res) => {
     "Inspect only the minimum files needed to answer the question. " +
     "Stop as soon as you have enough information to answer.";
 
+  let inspectionWorkspace;
+
+  try {
+    inspectionWorkspace = await createCodexInspectionWorkspace(__dirname);
+  } catch (error) {
+    console.error("Could not prepare Codex inspection workspace:", error.message);
+    return res.status(500).json({ error: "Failed to prepare Codex" });
+  }
+
   const child = spawn(
     "codex",
     [
@@ -196,14 +289,15 @@ app.post("/api/codex", async (req, res) => {
       "--ephemeral",
       "--sandbox",
       "read-only",
+      "--skip-git-repo-check",
       "-c",
       'model_reasoning_effort="low"',
       codexTask,
     ],
 
     {
-      cwd: process.cwd(),
-      env: process.env,
+      cwd: inspectionWorkspace,
+      env: createCodexEnvironment(),
     }
   );
 
@@ -216,6 +310,20 @@ app.post("/api/codex", async (req, res) => {
   let stderrWasTruncated = false;
   let hasResponded = false;
   let timeoutId = null;
+  let workspaceWasRemoved = false;
+
+  async function removeInspectionWorkspaceOnce() {
+    if (workspaceWasRemoved) {
+      return;
+    }
+    workspaceWasRemoved = true;
+
+    try {
+      await removeCodexInspectionWorkspace(inspectionWorkspace);
+    } catch (error) {
+      console.error("Could not remove Codex inspection workspace:", error.message);
+    }
+  }
 
   function sendResponseOnce(status, responseBody) {
     if (hasResponded) {
@@ -300,9 +408,12 @@ app.post("/api/codex", async (req, res) => {
   child.on("error", (err) => {
     console.error("Codex process error:", err.message);
     sendResponseOnce(500, { error: "Failed to start Codex" });
+    removeInspectionWorkspaceOnce();
   });
 
-  child.on("close", (code) => {
+  child.on("close", async (code) => {
+    await removeInspectionWorkspaceOnce();
+
     if (hasResponded) {
       return;
     }
@@ -325,7 +436,109 @@ app.post("/api/codex", async (req, res) => {
     });
   });
 });
+}
 
-app.listen(PORT, HOST, () => {
-  console.log(`Voice assistant app running at http://${HOST}:${PORT}`);
+if (capabilities.developerWorkspace) {
+app.post("/api/developer/git-status", async (_req, res) => {
+  const result = await gitStatusImpl({ projectRoot: __dirname });
+
+  res.status(result.success ? 200 : 500).json(result);
 });
+
+app.post("/api/developer/git-diff", async (req, res) => {
+  const result = await gitDiffImpl({
+    projectRoot: projectWorkspaceRoot,
+    path: req.body?.path,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/git-history", async (_req, res) => {
+  const result = await gitHistoryImpl({ projectRoot: projectWorkspaceRoot });
+  if (!result.success) return res.status(400).json(result);
+  commitReferences.clear();
+  const commits = result.commits.map((commit) => {
+    const reference = randomUUID();
+    commitReferences.set(reference, commit);
+    return { ...commit, reference };
+  });
+  res.json({ ...result, commits });
+});
+
+app.post("/api/developer/commit-diff", async (req, res) => {
+  const commit = commitReferences.get(req.body?.reference);
+  if (!commit) return res.status(400).json({ success: false, error: "commit_unavailable", terminal: true });
+  const result = await commitDiffImpl({ projectRoot: projectWorkspaceRoot, commit });
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/search", async (req, res) => {
+  const result = await projectSearchImpl({
+    projectRoot: projectWorkspaceRoot,
+    query: req.body?.query,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/read-file", async (req, res) => {
+  const result = await projectReadFileImpl({
+    projectRoot: projectWorkspaceRoot,
+    path: req.body?.path,
+    startLine: req.body?.start_line,
+    endLine: req.body?.end_line,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/open-file", async (req, res) => {
+  const result = await projectOpenFileImpl({
+    projectRoot: projectWorkspaceRoot,
+    path: req.body?.path,
+    line: req.body?.line,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+app.post("/api/developer/tests", async (_req, res) => {
+  const result = await projectTestImpl({ projectRoot: projectTestRoot });
+
+  // A failed suite is a completed tool result, not an HTTP failure. The
+  // browser needs the normalized result to report the real test state.
+  res.status(200).json(result);
+});
+}
+
+app.use((error, _req, res, next) => {
+  if (error?.type === "entity.too.large") {
+    return res.status(413).json({ error: "Request body is too large" });
+  }
+
+  if (
+    error instanceof SyntaxError &&
+    error.status === 400 &&
+    Object.hasOwn(error, "body")
+  ) {
+    return res.status(400).json({ error: "Invalid JSON request body" });
+  }
+
+  next(error);
+});
+
+  return app;
+}
+
+export function startServer() {
+  const app = createApp();
+
+  return app.listen(PORT, HOST, () => {
+    console.log(`Voice assistant app running at http://${HOST}:${PORT}`);
+  });
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  startServer();
+}

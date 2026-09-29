@@ -1,18 +1,9 @@
 # Offscreen Roadmap
 
-This roadmap is intentionally small and ordered for a hackathon project. It
-separates work that makes today's demo dependable from larger improvements that
-can wait. A phase should be completed and verified before starting a dependent
-phase.
+This roadmap favors differentiated, reliable workflows over feature count. See
+[PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md) for the product decision rule.
 
-## Priorities
-
-- **NOW** — needed to safely maintain or demonstrate existing behavior.
-- **BEFORE SUBMISSION** — important for a trustworthy final demo, but can
-  follow the NOW work.
-- **LATER** — useful after the hackathon; do not let it displace reliability.
-
-## Phase 0 — Current working baseline
+## Protected current baseline
 
 **Priority: NOW. No dependency.**
 
@@ -22,152 +13,156 @@ Document and preserve the functionality already present:
   minted by the local Express server.
 - Microphone audio is converted to 24 kHz PCM and sent over the Voice Agent
   WebSocket; agent PCM audio is played in the browser.
+- Natural voice interruption (barge-in) uses Voice Agent input
+  `interrupt_response: true`: when a user begins a real interruption while
+  Offscreen is speaking, AssemblyAI marks the reply interrupted and Offscreen
+  flushes queued browser audio. Users can say things such as “wait” or “stop”;
+  this is not a dedicated Offscreen tool and needs no second acknowledgement.
 - The agent can open a small allowlisted set of websites in the browser.
+- Bounded browser navigation, page reading, text finding, and back navigation
+  are implemented through the controlled browser adapter.
+- Safe browser click and type actions are implemented only against observed
+  page references; typing never submits.
+- Consequential browser actions require explicit confirmation immediately
+  before the stored action executes.
+- Local and hosted-safe capability surfaces are separated. `HOSTED_DEMO` does
+  not expose local-only capabilities; this does not mean hosted public browser
+  automation is finished.
 - The agent can query a read-only Google Calendar for named ranges and
   natural-language dates.
 - The agent can ask a locally installed Codex CLI to inspect the local project
   in read-only mode.
 - The browser displays connection status and user/agent transcripts.
+- The user can explicitly enable browser voice wake while disconnected and say
+  “Connect Offscreen” to start the normal voice session. Wake recognition is
+  stopped while connecting/connected and resumes after disconnect while the
+  option remains enabled.
 - The browser shows activity/status feedback during long-running tool calls,
   such as while Codex is inspecting the project.
+- The user can ask what Offscreen is currently doing while Calendar or Codex
+  work is running without superseding that work; ordinary new requests retain
+  the existing supersession behavior.
+- The agent can end the active voice session when the user explicitly asks to
+  disconnect.
+- The agent can cancel current in-progress tool work when the user explicitly
+  asks, while keeping the voice session connected.
+- The agent can enter voice-first standby when the user explicitly asks to
+  pause listening. The voice session remains connected and normal requests are
+  ignored; users can ask to resume listening or disconnect, and can also use the
+  Resume listening UI fallback.
+- The agent can repeat its most recent completed spoken response when the user
+  explicitly asks.
+- The agent can summarize or shorten its most recent completed spoken response
+  when the user explicitly asks.
 
-Before refactoring, manually verify the exact demo flows that must remain
-unchanged: connect, speak, hear a reply, open a supported site, query Calendar,
-ask Codex, and disconnect.
+Also protect current activity reporting, session/turn stale-result isolation,
+Codex cancellation with its original `call_id`, and tool-result coordination.
+Do not reintroduce `get_current_activity` or `stop_current_speech` tools:
+activity is client-owned context and natural AssemblyAI barge-in is intentional.
 
-## Phase 1 — Engineering foundation
+## P0 — Core standout workflows
 
-**Priority: NOW. Depends on Phase 0 being documented and manually checked.**
+### 1. Deterministic developer workspace
 
-1. Complete the beginner-facing documentation in this repository:
-   architecture, conventions, development setup, and this roadmap.
-2. Establish a lightweight automated test baseline using the platform's
-   built-in capabilities; do not add a test dependency merely for convenience.
-3. Keep the test baseline focused on deterministic behavior. The obsolete
-   `calendar-test.js` helper has been replaced by
-   `test/calendar-query.test.js`, which protects the current query parser.
-4. Define release/archive hygiene: `offscreen.zip` is a release artifact, not
-   an independent source of truth. Generate it from the exact release commit
-   and compare its contents before submission.
+**Status: implemented; live device acceptance still required where applicable.**
 
-Exit criteria: a documented test command exists, deterministic behavior has
-tests, the obsolete helper has a deliberate disposition, and the release ZIP
-process is written down.
+Build read-only Git status and changed-file inspection, bounded project file
+search and read, a configured test command, structured test-failure summaries,
+and validated VS Code project/file opening. Never permit arbitrary spoken shell
+execution. Use Codex only for reasoning handoffs such as “why did this fail?”
 
-## Phase 2 — Reliability
+### 2. Contextual follow-ups
 
-**Priority: NOW. Depends on Phase 1 tests for any extracted deterministic
-logic.**
+**Status: substantially implemented for project files, recent commits, and
+spoken browser link results; stale-state regression coverage is in CI.**
 
-**Status: Complete.** Voice connection lifecycle protection, stale-session
-protection, tool-result isolation across finalized user turns, and bounded
-Codex timeout/output handling are implemented.
+Support bounded references such as “open that file,” “which test failed?,” “run
+those tests again,” and “read that result.” References must expire or clear
+safely when stale, and stale session or tool state must not mutate active work.
 
-Improve the existing browser session without changing its product behavior:
+### 3. Gmail read-only
 
-- Make connection lifecycle and teardown reliable for token failures,
-  microphone denial, worklet failures, connecting sockets, open sockets, and
-  reconnects.
-- Add stale-session protection so callbacks from an old WebSocket cannot alter
-  a newer connection.
-- Isolate asynchronous tool results by voice session/turn so a late Calendar
-  or Codex response is not sent through the wrong session.
-- Align the Codex server timeout with the voice tool timeout, bound process
-  lifecycle, and ensure an HTTP request receives at most one response.
-- Improve error handling and useful diagnostics without logging secrets or
-  full private task content by default.
+**Status: not implemented. This remains the main P0 integration requiring a
+separate private-data/OAuth decision. Gmail currently opens only as a website.**
 
-Exit criteria: connect/disconnect/reconnect and interrupted tool calls have
-manual regression checks, and the new deterministic state behavior is tested
-where practical.
+Add recent, unread, and important message listing; sender, subject, and basic
+query search; message/thread reading; and thread summaries. Do not add send,
+reply, delete, archive, or other write actions. Do not broaden OAuth scopes
+beyond read-only without explicit approval.
 
-## Phase 3 — Calendar cleanup
+### 4. Higher-level web research
 
-**Priority: BEFORE SUBMISSION. Depends on Phase 1.**
+**Status: implemented for the LOCAL demo with fixed-provider public-web search,
+bounded snapshots, validated browser actions, and spoken ordinal result
+opening; live search quality still needs manual acceptance.**
 
-**Status: Complete.** Calendar timezone correctness and the focused Calendar
-cleanup are implemented, including deterministic parsing tests for supported
-ranges, natural-language dates, ordinals, and timezone-sensitive cases.
+Build on the existing controlled browser foundation to search the web, inspect
+results, and open/read relevant results. Support bounded references such as
+“open the second result.” Do not claim arbitrary-site reliability.
 
-- Extend the existing deterministic `calendar-query.js` tests as Calendar
-  behavior changes; do not move parsing back into an Express route.
-- Make browser, server parsing, and Google Calendar timezone handling
-  consistent for dates such as “Friday” and “the 28th.”
-- Remove duplicated Google Calendar client, timezone, and event-formatting
-  logic in `calendar.js` through a few focused helpers.
-- Add tests for supported ranges, bare ordinal dates, named dates, invalid
-  input, and timezone-sensitive cases.
+### 5. Combined standout workflow
 
-Do not change OAuth scopes or add Calendar write access in this phase.
+**Status: automated smoke coverage exists for developer state → web search →
+Calendar → session evidence → contextual browser opening. Gmail remains absent,
+so the full planned cross-domain story is not yet complete. See DEMO.md.**
 
-## Phase 4 — Backend boundaries
+Combine developer tools, browser research, Calendar, Gmail, and contextual
+follow-ups into one continuous eyes-free work session. Activity questions must
+not cancel long-running work. Demonstrate concurrency only where lifecycle
+safety supports it.
 
-**Priority: BEFORE SUBMISSION if needed for reliability; otherwise LATER.
-Depends on Phases 2 and 3.**
+Acceptance for P0: deterministic operations use deterministic tools; all
+targets and references are bounded and validated; failures are normalized; and
+lifecycle, stale-state, cancellation, and confirmation boundaries are tested
+and manually exercised where applicable.
 
-- Decide and document ownership of the three current Calendar routes. Keep
-  only routes that have a real caller or a documented developer API purpose.
-- Move the Codex child-process details into a proposed focused runner module,
-  leaving the route responsible for HTTP validation and responses.
-- Make API ownership clear: routes validate HTTP input; integration modules
-  call external services; deterministic modules parse and format data.
-- Tighten input validation and return short, safe user-facing failures.
-- Document and enforce the local-only security assumptions of Codex access.
+## P1 — Reliability and demo polish
 
-This is a boundary cleanup, not a new backend framework or authentication
-redesign.
+Perform end-to-end manual demo verification, exercise failure and retry
+behavior, stale-state safety, cancellation, confirmation, interruption,
+standby/resume, and demo rehearsal.
 
-## Phase 5 — Frontend readability
+## P1 — Deployment
 
-**Priority: BEFORE SUBMISSION only if Phases 1–4 are stable; otherwise LATER.
-Depends on Phase 2.**
+**Status: hosted-safe route/capability gating and baseline HTTP hardening are
+implemented. Public binding is deliberately still blocked pending a concrete
+token-abuse/rate-limit, trusted-proxy, HTTPS, and origin strategy. See
+docs/DEPLOYMENT.md.**
 
-Gradually split the current browser script into native ES modules without
-introducing React, a bundler, or a state-management library:
+Hosted-safe mode already exists. After the P0 workflows are strong, complete
+token and public-HTTP security, deployment configuration, and application URL
+verification. Add bounded hosted browser capability only if time and safety
+allow. Do not represent the existing local controlled browser as finished
+hosted public browser automation.
 
-- proposed `app.js`: connection-state orchestration and event wiring;
-- proposed `voice-session.js`: AssemblyAI WebSocket protocol and lifecycle;
-- proposed `audio.js`: microphone capture, PCM transport, and playback;
-- proposed `tools.js`: tool definitions and browser-side tool execution;
-- proposed `ui.js`: transcript and status rendering.
+## P2 — Submission assets
 
-`public/index.html` should remain the page markup, styles, controls, and module
-entry point. Make one extract at a time and verify the full voice flow after
-each extract.
+**Status: a grounded lablab submission copy pack, video outline, slide outline,
+cover-image brief, and final checklist are drafted in SUBMISSION.md. Real video,
+cover image, presentation link, screenshots, and any tested application URL
+remain to be produced.**
 
-## Phase 6 — Remaining product work
+Prepare README polish, video, slides, cover image, screenshots,
+title/descriptions/tags, public repository/default branch, and final
+application URL. Acceptance: assets and public claims match the actual product,
+and the full demo is rehearsed with real voice/device/integration conditions.
 
-**Priority: BEFORE SUBMISSION only after Phases 1–3 are stable; otherwise LATER.
-Depends on a reliable baseline.**
+## P3 — Optional after core is strong
 
-Do not invent new features during the cleanup.
+Consider write actions, send/reply email, task/reminder writes, broader browser
+permissions, Chrome DevTools MCP, and other integrations. Each requires a
+focused specification and, for new permissions or writes, explicit approval.
 
-Product directions already discussed include:
-- Gmail/read-only email assistance;
-- developer/productivity workflows;
-- additional bounded low-screen computer actions.
+## Feature specification template
 
-These are proposals, not current features or commitments.
-
-Before adding any of these, write a small feature specification covering user
-value, permissions, security boundary, tool behavior, failure behavior, and
-tests. In particular, do not add Gmail access or any write capability without
-explicit approval and a separate security review.
-
-## Phase 7 — Demo and submission
-
-**Priority: BEFORE SUBMISSION. Depends on all chosen earlier phases.**
-
-- Run the relevant automated regression tests.
-- Update the README with setup, commands, and a concise product description.
-- Rehearse the full demo flow using real microphone, AssemblyAI, Calendar, and
-  Codex conditions.
-- Generate `offscreen.zip` from the exact release commit and verify that it
-  contains the same source files as that commit.
-- Verify `.env`, `credentials.json`, `token.json`, private keys, and generated
-  files are not committed or included in the release archive.
-- Review user-facing errors, known limitations, and a simple recovery path for
-  failed connections.
-
-The submission should favor a short, reliable demo over additional features or
-a broad architectural rewrite.
+```text
+Goal
+User value
+Demo scenario
+Allowed scope
+Protected behavior
+Security boundary
+Failure behavior
+Acceptance criteria
+Verification
+```

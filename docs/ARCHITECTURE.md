@@ -14,18 +14,45 @@ This document distinguishes **current architecture** (code that exists today)
 from **proposed architecture** (a future cleanup plan). Do not assume a
 proposed file or module already exists.
 
+## Governing principle
+
+**AssemblyAI interprets voice. Offscreen owns state and safety. Tools perform
+actions.** AssemblyAI may select a capability from the bounded surface, but
+Offscreen remains responsible for lifecycle ownership, input validation,
+confirmation, and normalized results.
+
 ## Current repository structure
 
 ```text
 server.js                 Express server and backend API routes
+browser-mcp.js            Bounded Playwright MCP client adapter
 calendar.js               Google Calendar authentication and queries
 calendar-query.js         Deterministic Calendar query interpretation
 test/calendar-query.test.js  Node tests for Calendar query interpretation
+test/calendar-tool.test.js   Node tests for Calendar HTTP execution
+test/codex-tool.test.js      Node tests for Codex HTTP execution
 public/
-  index.html              Browser UI and nearly all browser application logic
+  index.html              Browser UI markup
+  styles.css              Page styles
+  app.js                  Browser orchestration, event semantics, and tool dispatch
+  voice-session.js        AssemblyAI transport and connection lifecycle
+  wake-listener.js        Optional disconnected-state browser speech recognition
+  codex-call-tracker.js   Codex interactive-call tracking and supersession/cancellation
+  tool-result-coordinator.js  Generic tool-result queue/task coordination
+  session-activity-ledger.js  Bounded session-local completed-action receipts
+  browser-result-context.js  Spoken-only bounded browser link references
+  browser-search.js        Fixed-provider bounded web search request builder
+  audio.js                Microphone capture and PCM playback
+  tools.js                Static AssemblyAI tool definitions
+  website-tool.js         Supported website execution
+  calendar-tool.js        Calendar HTTP execution
+  codex-tool.js           Codex HTTP execution
+  git-status-tool.js      Git status HTTP execution
+  project-workspace-tool.js  Project search/read HTTP execution
+  browser-tool.js         Browser MCP HTTP execution
+  ui.js                   DOM lookup and UI rendering
   pcm-processor.js        AudioWorklet for microphone PCM conversion
 .env.example              Names the required AssemblyAI environment variable
-offscreen.zip             Tracked release/archive artifact
 docs/                     Project documentation
 ```
 
@@ -36,11 +63,16 @@ docs/                     Project documentation
 `server.js` starts Express, serves `public/`, and reads the AssemblyAI API key
 from the server environment. It currently owns several different concerns:
 
+- server middleware disables Express fingerprinting, applies conservative
+  response headers, marks API responses no-store, caps JSON bodies at 16 KB,
+  and normalizes parser failures;
 - `GET /api/voice-token` mints a short-lived AssemblyAI token for the browser;
 - Calendar HTTP routes validate requests and call `calendar.js`;
 - the Calendar query route validates input, calls `calendar-query.js`, and
   chooses the appropriate Calendar query;
 - `POST /api/codex` starts a local read-only Codex CLI process;
+- `POST /api/browser` validates one of six bounded browser actions and calls
+  `browser-mcp.js`;
 - static-file serving and server startup.
 
 The file is an entry point, but it has grown beyond simple application assembly.
@@ -55,23 +87,202 @@ records into the smaller object returned to the browser.
 It uses the read-only Google Calendar scope. Google credentials remain on the
 server/local machine and are not sent to the browser.
 
-### `public/index.html`
+### Browser frontend
 
-`index.html` is currently both the web page and the browser application. It
-contains:
+### Frontend files
 
-- page markup and CSS;
-- configuration controls for voice, greeting, and system prompt;
-- AssemblyAI WebSocket connection setup and event handling;
-- microphone permission, AudioContext, and PCM upload setup;
-- synthesized PCM playback scheduling;
-- transcript and status rendering;
-- AssemblyAI tool definitions;
-- browser-side website, Calendar, and Codex tool handling;
-- asynchronous tool-result queues and connection lifecycle state.
+`index.html` contains page markup and configuration controls.
 
-This works as a compact prototype, but it is the main concentration of
-responsibility in the repository.
+`styles.css` contains page styles.
+
+`ui.js` owns DOM lookup and presentation, including status, transcript
+rendering, partial user transcript state, control bindings, tool-status
+bubbles, and the read-only Activity receipt panel.
+
+`audio.js` owns microphone capture, AudioWorklet setup, PCM encoding and
+playback, interruption, and audio cleanup.
+
+`tools.js` exports the static AssemblyAI tool definitions.
+
+`voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
+creation and closure, raw parsed inbound events, and JSON outbound messages.
+It does not know about UI, tool names, tool turns, active session IDs, or
+event meaning.
+
+`session-activity-ledger.js` is the browser-owned, bounded evidence layer for
+meaningful completed actions. `app.js` starts receipts only for an explicit
+trackable set: developer/Codex calls plus safe Calendar and controlled-browser
+operations. The existing tool-result coordinator completes them
+only when a result belongs to the active session/turn. Existing interactive
+trackers resolve cancellation with the original call ID, so cancelled work is
+recorded as cancelled rather than successful. The ledger retains at most 25
+receipts, excludes raw contents, patches, prompts, transcripts, absolute paths,
+and secrets, and is cleared on disconnect/new session but not pause/resume.
+Before a tool turn is invalidated, `app.js` terminalizes any still-running
+receipts owned by that exact session/turn as cancelled with a bounded internal
+superseded/interrupted/cancelled summary. The later stale tool result remains
+discarded and cannot overwrite that terminal receipt. `get_session_activity`
+reads this local ledger with only `all`/`failed` filters
+and a 1–10 result limit; it is available in hosted mode but can report only
+actions actually available there. Initial `browser_click` requests are intentionally
+not receipts because a consequential click may only create a pending confirmation;
+`browser_confirm_action` is receipt-eligible when the confirmed action actually runs. The visible Activity panel renders at most
+the five latest receipts from this same ledger, newest first. It is a
+presentation-only projection: it cannot create, complete, cancel, or otherwise
+mutate receipt lifecycle state, and receipt text is inserted via DOM
+`textContent` rather than HTML.
+
+`wake-listener.js` owns bounded browser `SpeechRecognition`/
+`webkitSpeechRecognition` phrase listening. The disconnected wake listener
+matches only “Connect Offscreen”. While a connected session is in standby,
+the AssemblyAI microphone path is released and a separate local listener
+accepts only the fixed resume/disconnect commands. These listeners never hold
+an AssemblyAI token or WebSocket, and they are not active at the same time as
+normal AssemblyAI microphone capture.
+
+`website-tool.js` owns supported-site lookup and opening allowlisted URLs in a
+new browser tab.
+
+`calendar-tool.js` owns browser-side Calendar HTTP execution: it calls the
+local Calendar endpoint and returns its existing success or failure tool-result
+data. It does not coordinate AssemblyAI sessions, tool turns, or results.
+
+`codex-tool.js` owns browser-side Codex HTTP execution: it validates a task,
+calls the local Codex endpoint, and returns its existing success or failure
+tool-result data. It does not know about AssemblyAI events, interactive-call
+tracking, supersession/cancellation, sessions, tool turns, or result queues.
+
+`git-status.js` owns deterministic local Git status inspection. It invokes only
+the fixed `git status --porcelain=v1 --branch -z` command in the configured
+project root, parses its machine-readable output into branch and safe file
+status entries, and normalizes failures without returning process output.
+
+`git-diff.js` owns deterministic, LOCAL-only Git content inspection. It first
+uses fixed `git status --porcelain=v1 --branch -z`, then only fixed
+`git diff --no-ext-diff --no-color --no-renames --unified=3` invocations with an
+optional validated project-relative path after `--`. It never accepts a Git
+subcommand, flag, revision, executable, working directory, or shell input. It
+uses the shared project-path policy, rejects denied paths and unsafe current
+files/symlinks, and never exposes absolute paths. It separates staged and
+unstaged tracked changes, reports untracked files without reading their
+contents, limits files/hunks/lines/characters, marks truncation, and normalizes
+Git failures without returning process output. This is read-only: it cannot
+stage, commit, push, checkout, reset, restore, or alter Git state.
+
+`git-history.js` owns deterministic, LOCAL-only recent history and commit-diff
+inspection. It runs only fixed `git log -n 5 --format=...` and fixed `git show`
+commands with `shell: false`, a configured repository cwd, a five-second
+timeout, and bounded buffers. History returns at most five commits (the adapter
+hard maximum is ten); an opaque server-issued reference maps to the exact full
+immutable commit ID. The browser keeps that reference in a dedicated spoken
+commit context and removes IDs/references from model-facing history results.
+Commit detail is possible only through that opaque reference, never a supplied
+hash or revspec. It reports at most eight safe project-relative files with the
+existing small bounded hunk format. Root commits are supported by `git show`;
+merge commits return a normalized unsupported result to avoid ambiguous diffs.
+Changed-file references join the normal project-file context and open only the
+current working-tree version.
+
+For broad diff results, `git-diff.js` also provides a small ordered
+`presentation.files` sequence. `project-reference-context.js` registers only
+that sequence and then uses its existing agent-transcript path capture to keep
+only paths actually spoken to the user, in spoken order. File-specific diffs do
+not replace that broad list. Terminal safe errors distinguish protected paths
+(`path_denied`), invalid/unavailable paths, and validated files with no current
+changes; browser transport preserves only these normalized terminal results.
+
+`project-workspace.js` owns deterministic local project search and source-file
+reading. It walks only the configured project root with Node filesystem APIs,
+uses literal text matching, rejects paths that are not repository-relative, and
+does not follow symlinks. One shared exclusion policy hides Git metadata,
+dependencies, environment files, credentials, private keys, archives, and
+other obvious secret files from both operations. It bounds query/path lengths,
+matches, snippets, file sizes, and read ranges; paths and all repository text
+are untrusted data rather than instructions.
+
+`project-workspace-tool.js` owns browser-side HTTP execution for the local
+project search and read routes. It sends only the tool arguments to fixed
+endpoints and returns normalized failures; `app.js` retains session/turn checks
+and generic tool-result coordination.
+
+`project-vscode.js` owns the deterministic, LOCAL-only VS Code file-opening
+adapter. It reuses the workspace path and text-file policy, accepts only an
+existing project-relative file plus an optional bounded line number, and starts
+the fixed `code` CLI directly with `shell: false`. It never accepts an
+application, executable, command, working directory, environment, or project
+root from the browser.
+
+`git-status-tool.js` owns browser-side Git status HTTP execution. It sends no
+command, path, or arguments, and returns the server's structured status result.
+
+`git-diff-tool.js` owns browser-side Git diff HTTP execution. It sends only the
+optional project-relative path to its fixed local endpoint and normalizes
+transport failures; `app.js` retains session/turn checks, activity reporting,
+and shared reference registration.
+
+`browser-tool.js` owns browser-side HTTP execution for the bounded browser
+actions and confirmation control requests. It calls the local browser endpoint
+and returns normalized results; it does not know about MCP, AssemblyAI sessions,
+tool turns, or result queues.
+
+`browser-result-context.js` owns the client-side authority for contextual
+browser ordinals such as “open the second result.” A successful page read/find
+extracts at most five ordinary navigation links from the current observed refs;
+links with consequential action wording are excluded. The context becomes
+eligible only after the tool result was actually sent and the agent's completed
+spoken response contains the exact link label. Ordinal order follows spoken
+order, not hidden page order. A fresh page read/find replaces prior authority,
+and navigation/page-changing actions, interruption, disconnect, or a new
+session clear it. The dedicated `browser_open_result` tool accepts only a
+position and reuses the existing validated click adapter; it cannot accept a
+URL, selector, or raw ref.
+
+`browser-search.js` validates and normalizes one bounded public-web query and
+builds only fixed HTTPS DuckDuckGo and Bing search URLs. `browser_search_web`
+tries Bing only after DuckDuckGo fails, presents a challenge, or yields no
+ordinary observed links; it does not add a backend MCP action: `app.js` composes the existing
+`navigate` then `snapshot` operations, returns only the normalized query and
+bounded snapshot content, and registers those snapshot links with the same
+spoken-result context.
+
+### `browser-mcp.js`
+
+`browser-mcp.js` owns the backend Playwright MCP connection and the one pending
+consequential browser-click confirmation. It starts the
+locally installed Playwright MCP server lazily in a headless, isolated context,
+reuses the connection, verifies its required tools at startup, and maps only
+`navigate`, `snapshot`, `find`, `back`, `click`, and `type`. Consequential
+clicks are stored with their exact observed ref, description, ref generation,
+and expiry instead of executing. Button-like controls require confirmation by
+default; only a small observed-label allowlist of low-risk controls may run
+immediately. Only the dedicated confirmation path can
+execute that stored action once. It accepts only http/https navigation, bounds
+output, and normalizes MCP failures. It never forwards an arbitrary MCP tool
+name or arguments.
+
+`codex-call-tracker.js` owns unresolved interactive Codex call bookkeeping and
+explicit cancellation of calls from a superseded session/turn. It receives a
+callback from `app.js` to send cancellation results, so it does not own the
+WebSocket, session lifecycle, tool-turn generation, or result coordination.
+
+`tool-result-coordinator.js` owns generic pending tool-result queueing,
+active-task tracking, reply-done gating, and ordered result flushing. It
+receives callbacks from `app.js` to check turn validity and send results; it
+does not own the WebSocket, session lifecycle, a tool implementation, or UI.
+
+`app.js` contains:
+- AssemblyAI event semantics and session-update configuration;
+- active session IDs, tool-turn ownership, and stale-session checks;
+- tool-call identification and execution dispatch;
+- Codex tool-call identification, session/turn checks, and the decision to
+  supersede an earlier user turn;
+- bounded browser tool-call identification and activity descriptions;
+- completed user-turn tracking and explicit browser-confirmation gating;
+- website and Calendar tool-call identification;
+- client-owned descriptions of currently running Calendar/Codex work for
+  non-superseding voice status questions;
+- tool-result message composition for normal flushing and explicit Codex
+  cancellation results.
 
 ### `public/pcm-processor.js`
 
@@ -92,12 +303,17 @@ This Node built-in test suite protects the current Calendar query behavior,
 including supported ranges, natural-language dates, bare ordinal dates, and
 important month-boundary cases.
 
-### `offscreen.zip`
+### `test/calendar-tool.test.js`
 
-This is an archive artifact, not application code. The audit found that its
-copies of `server.js` and `public/index.html` differ from the current tracked
-source, so it must be regenerated from the exact release commit before
-submission.
+This Node built-in test suite mocks `fetch` to protect the existing Calendar
+request URL and success, HTTP-failure, and network-failure result shapes.
+
+### Release archives
+
+Release ZIPs are generated artifacts, not application source. Root-level ZIP
+files are ignored and must not be committed. For a submission artifact, create
+the archive from the exact reviewed release commit (for example with
+`git archive`) so the repository commit remains the single source of truth.
 
 ## Current request and data flow
 
@@ -113,6 +329,16 @@ Microphone
             → Google Calendar API
        → ask_codex: browser calls local Codex API
             → read-only local Codex CLI
+       → get_git_status: browser calls local Git status API
+            → fixed read-only Git status adapter in the configured project root
+       → get_git_diff: browser calls local Git diff API
+            → fixed bounded read-only Git diff adapter in the configured project root
+       → search_project/read_project_file: browser calls local project workspace APIs
+            → bounded Node filesystem search/read adapter in the configured project root
+       → open_project_file: browser calls the local project file-opening API
+            → validated fixed `code` CLI invocation for one configured-project file
+       → browser_*: browser calls local browser API
+            → bounded Playwright MCP adapter
   → browser queues tool.result
   → browser sends tool.result to AssemblyAI
   → AssemblyAI sends spoken reply PCM and transcript
@@ -136,9 +362,31 @@ Microphone
 
 AssemblyAI sends a `tool.call` event. The browser dispatches it by tool name,
 performs the requested browser or backend action, adds a result to a pending
-queue, and later sends `tool.result` messages when the reply/tool timing allows.
-The current implementation tracks this with shared counters and arrays in
-`index.html`.
+queue, and later sends `tool.result` messages when the reply/tool timing
+allows. Calendar uses `execution_mode: "hold"`; `ask_codex` uses
+`execution_mode: "interactive"`. `get_git_status` uses `execution_mode:
+"hold"` because it is fast and read-only. It is not cancellable at the process
+level; the existing session and tool-turn guards ignore a late completion from
+a superseded or disconnected session before it can queue a result or update
+activity state.
+
+Every connection and tool call carries the current `sessionId` and
+`toolTurnId`. This prevents an old request from changing a newer turn. A new
+finalized user turn explicitly resolves any superseded interactive Codex call
+with its original `call_id` before the old completion can be ignored.
+
+### Lifecycle invariants
+
+- A stale session cannot mutate the active session.
+- A stale tool turn cannot mutate a newer turn.
+- A current-activity question is the intentional non-superseding exception;
+  its client-owned context cannot cancel the work it reports.
+- Codex cancellation resolves the original `call_id`; late completions are
+  ignored.
+- Standby and wake remain client-owned browser behavior. Standby keeps the
+  WebSocket connected but releases normal AssemblyAI microphone capture; only
+  the bounded local resume/disconnect listener owns speech while paused.
+- UI activity status is feedback, not authoritative lifecycle state.
 
 ### Google Calendar flow
 
@@ -147,30 +395,80 @@ time to `GET /api/calendar/query`. `server.js` first identifies named ranges
 such as `today`. For a date-dependent query, it gets the primary Google
 Calendar timezone, passes that timezone to `calendar-query.js`, and passes the
 same timezone to `calendar.js` for the event lookup. `calendar.js` returns a
-simplified event list. The browser returns that data to AssemblyAI as a tool
-result.
+simplified event list. `calendar-tool.js` returns that data in the browser's
+Calendar tool-result shape, while `tool-result-coordinator.js` coordinates its
+AssemblyAI result queue.
 
 ### Codex flow
 
-The `ask_codex` browser tool sends its task to `POST /api/codex`. The server
-starts `codex exec` with a read-only sandbox and returns its stdout as the tool
-result. This is intended for a trusted, local development/demo environment.
+The `ask_codex` browser tool is identified and coordinated by `app.js`.
+`codex-tool.js` sends its task to `POST /api/codex` and returns the existing
+tool-result shape. `codex-call-tracker.js` retains interactive call tracking
+and supersession/cancellation; `app.js` retains session/turn checks and the
+decision to supersede a turn; generic queue/task result coordination lives in
+`tool-result-coordinator.js`. The server copies its own
+project directory into a temporary
+filtered inspection workspace, starts `codex exec` there in read-only and
+ephemeral modes with a restricted child environment, then returns its stdout
+as the tool result. The copy reduces exposure of repository-local secret files;
+it is not host-level filesystem isolation. This is intended for a trusted,
+local development/demo environment.
 
 ## Current frontend/backend boundary
 
-The browser owns user interface, microphone capture, audio playback, AssemblyAI
-WebSocket communication, browser-only actions, and transcript display.
+The browser owns user interface, microphone capture, audio playback, optional
+disconnected-state speech recognition for voice wake, AssemblyAI WebSocket
+communication, browser-only actions, and transcript display.
 
 The backend owns secrets, AssemblyAI token minting, Google OAuth credentials,
 Google Calendar access, Codex process execution, server-side validation, and
 HTTP APIs. Never move private API keys or Google OAuth credentials into browser
 code.
 
+## Target tool layer
+
+This is a target boundary, not a claim that new modules already exist.
+
+| Tool category | Purpose | Example |
+| --- | --- | --- |
+| Deterministic local/backend tools | Validated, predictable operations | “What files changed?” → Git; “run tests” → configured test runner. |
+| MCP adapters | Bounded browser/service capabilities | “Click that result” → browser MCP adapter. |
+| Reasoning tools | Analysis where deterministic output is not enough | “Why did this fail?” → Codex. |
+
+### MCP boundary
+
+MCP is an integration mechanism, not Offscreen's safety policy. Future adapters
+must expose a bounded capability set rather than a raw catalog, validate inputs,
+treat page and MCP output as untrusted, normalize failures, and require
+confirmation for consequential actions. MCP does not own the AssemblyAI session
+or tool-turn lifecycle.
+
+### Developer workspace boundary
+
+Future developer tools are limited to read-only Git, project-contained paths,
+a configured test command, and validated VS Code paths. No arbitrary voice
+shell execution. Use Codex for reasoning and diagnosis, not predictable work
+such as Git status or a known test command.
+
+### Deployment boundary
+
+The current loopback server, desktop Calendar OAuth, and local Codex CLI cannot
+simply be exposed as a public hosted service. `OFFSCREEN_MODE` provides an
+application-owned capability boundary: its default `LOCAL` mode keeps the full
+developer feature set, while `HOSTED_DEMO` registers only the voice-token route
+plus the runtime capability payload and hosted-safe voice tools. In hosted-demo
+mode, Calendar, Codex, and browser MCP routes are not registered, and the
+browser receives only the safe tool capabilities from a server-generated runtime
+payload served with `Cache-Control: no-store`. Missing or malformed browser
+runtime capability data falls back to the hosted-safe feature set. This does not
+yet add public authentication or change loopback binding.
+
 ## Current external integrations
 
 | Integration | Current use | Boundary |
 | --- | --- | --- |
 | AssemblyAI Voice Agent | Conversation, transcription, reply audio, and tool calls | Browser holds only a temporary token; server holds the API key. |
+| Browser speech recognition | Optional disconnected-state “Connect Offscreen” wake phrase | Browser-only feature; may use a browser/vendor online recognition service. |
 | Google Calendar API | Read-only Calendar queries | Server-only OAuth and API client. |
 | Codex CLI | Read-only local repository inspection | Server starts the local process; browser receives a result. |
 | Browser tabs | Opening a small allowlist of websites | Browser-only action; no backend needed. |
@@ -179,15 +477,19 @@ code.
 
 These are audit findings, not evidence that every path currently fails.
 
-- `index.html` combines many unrelated jobs, making future changes difficult to
+- `app.js` combines many unrelated jobs, making future changes difficult to
   understand and test.
 - Each voice connection has a monotonically increasing session ID. Disconnect
   invalidates that ID before closing the socket and releasing microphone/audio
   resources, so callbacks from an older connection are ignored.
-- Each tool call captures its originating session ID and tool-turn generation.
-  Each non-empty finalized user transcript starts a new tool generation.
-  Late Calendar or Codex completions from an older turn are ignored instead of
-  altering a newer turn's queue, counters, tool results, or status display.
+- Each tool call captures its originating `sessionId` and `toolTurnId`.
+  Ordinary non-empty finalized user transcripts start a new tool generation.
+  A small exact set of current-activity questions is the deliberate exception:
+  those questions use client-owned running-work context and do not supersede the
+  work they ask about. Late Calendar or Codex completions from an older turn are
+  ignored instead of altering a newer turn's queue, counters, tool results, or
+  status display. Before an ordinary turn change, a superseded interactive
+  Codex call is explicitly resolved with its original `call_id`.
 - The Codex route now limits each local process to 40 seconds, below the
   voice tool's 45-second timeout. It also limits task and captured-output size
   and uses one response guard so timeout, process error, and close events do
@@ -197,9 +499,11 @@ These are audit findings, not evidence that every path currently fails.
   integration verification.
 - Multiple Calendar endpoints exist, but only the query endpoint has a
   current in-repository browser caller.
-- The initial automated suite covers only deterministic Calendar-query logic;
-  integration behavior still needs manual verification.
-- `offscreen.zip` is stale and must not be trusted as a release artifact.
+- The Node test suite covers Calendar parsing and tool execution plus session,
+  wake, standby, disconnect, repeat/summarize, current-activity, Codex-call,
+  and tool-result lifecycle behavior. Real integrations still need manual
+  verification.
+- Release archives are not tracked; generate any submission ZIP from the exact reviewed release commit.
 
 ## Proposed target architecture
 
@@ -217,13 +521,15 @@ server.js                         application assembly and static hosting
   codex-runner.js                 proposed bounded Codex process runner
 
 public/
-  index.html                      markup, CSS, controls, module entry point
-  app.js                          proposed browser orchestration
+  index.html                      existing static markup
+  styles.css                      existing page styles
+  app.js                          existing browser orchestration entry point
   voice-session.js                proposed AssemblyAI session lifecycle
-  audio.js                        proposed microphone and playback logic
-  tools.js                        proposed tool definitions and execution
-  ui.js                           proposed transcript/status rendering
+  audio.js                        existing microphone and playback logic
+  tools.js                        existing static AssemblyAI tool definitions
+  ui.js                           existing transcript / status rendering
   pcm-processor.js                existing AudioWorklet
+  website-tool.js                 existing supported website execution
 ```
 
 Do not create all these modules at once. Extract one responsibility only when
@@ -241,10 +547,11 @@ tests and manual verification protect the current behavior.
 | `calendar.js` | Authenticate with Google, obtain Calendar context, fetch, and format events. |
 | `codex-runner.js` | Start, time-limit, and normalize the read-only Codex process. |
 | `app.js` | Coordinate UI actions and one active voice session. |
-| `voice-session.js` | Own WebSocket messages, session generation, and stale-event protection. |
-| `audio.js` | Capture, convert/send, schedule, stop, and clean up audio. |
-| `tools.js` | Define supported tools and return a normalized tool result. |
+| `voice-session.js` | Own AssemblyAI token fetching, WebSocket connection lifecycle, and raw message transport. |
+| `audio.js` | Capture microphone audio, encode PCM for delivery, schedule playback, stop, and clean up audio. |
+| `tools.js` | Export static AssemblyAI tool definitions. |
 | `ui.js` | Update status and transcript DOM elements. |
+| `styles.css` | Hold the page styles. |
 
 ## Rules for deciding where new code belongs
 

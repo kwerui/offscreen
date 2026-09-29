@@ -1,8 +1,9 @@
 # Offscreen
 
-Offscreen is a voice-first computer companion designed to help users complete
-routine computer tasks with less screen and keyboard interaction. It was built
-for the AssemblyAI Voice Agent Hackathon.
+Offscreen is an eyes-free voice companion for real computer work, built for the
+AssemblyAI Voice Agent Hackathon. Most voice assistants answer questions;
+Offscreen is designed to get bounded work done with minimal screen and keyboard
+attention.
 
 Rather than providing arbitrary computer control, Offscreen combines voice
 conversation with a small set of deliberate, bounded actions: opening a
@@ -12,18 +13,94 @@ Codex CLI to inspect the current project.
 ## Current features
 
 - Voice conversation through the AssemblyAI Voice Agent API.
+- Optional Wake Phrase while disconnected: explicitly enable **Wake Phrase** in
+  the UI, then say “Connect Offscreen” to start the normal AssemblyAI session.
+  The explicit preference is retained in browser-local storage when available.
+  The browser wake listener stops while Offscreen is connecting or connected
+  and starts again after disconnect while the option remains enabled.
+- Natural voice interruption: Voice Agent input uses `interrupt_response: true`,
+  so when a user begins a real interruption while Offscreen is speaking,
+  AssemblyAI marks the reply interrupted and Offscreen flushes queued browser
+  audio. Users can naturally say things such as “wait” or “stop”; this is
+  barge-in, not a dedicated Offscreen tool, and needs no second acknowledgement.
+- Explicit voice disconnect: ask Offscreen to end or disconnect the current
+  session.
+- Explicit voice cancellation: ask Offscreen to cancel the current in-progress
+  tool work. This keeps the voice session connected.
+- Voice-first standby: ask Offscreen to pause listening or go on standby while
+  the voice session remains connected. Offscreen releases the AssemblyAI
+  microphone path while paused and uses a narrow browser listener only for
+  “Resume listening” or “Disconnect”. The client also gates the final PCM send
+  boundary while standby is active, so background speech never becomes a Voice
+  Agent turn even if the browser delivers late audio frames. Brief descending
+  and ascending earcons confirm pause and resume without requiring visual
+  feedback. For a voice-triggered pause, microphone ownership transfers to the
+  local standby recognizer only after the AssemblyAI reply containing the pause
+  tool call has finished, preventing the recognizer from hearing the tail of the
+  user's own pause utterance. Model-generated standby acknowledgements remain
+  suppressed. The stateful **Pause Listening** / **Resume Listening** UI control
+  uses the same standby state. Wake Phrase remains disconnected-only
+  and never resumes a paused connected session.
+- Explicit voice repeat: ask Offscreen to repeat its most recent completed
+  response.
+- Explicit voice summarize/shorten: ask Offscreen to summarize or shorten its
+  most recent completed response.
+- Current-activity reporting: while Calendar or Codex work is running, ask what
+  Offscreen is doing or working on. The status question does not supersede the
+  in-progress work; ordinary new requests still do.
+- Session action receipts: ask what Offscreen just did, what it has done so far,
+  whether a recent action succeeded, or which actions failed. The browser keeps
+  the last 25 bounded action receipts for the active session, including developer/Codex work plus safe Calendar and controlled-browser actions;
+  receipts contain concise safe summaries, not source contents, patches,
+  transcripts, credentials, or absolute paths. The page also shows the latest
+  five receipts in a compact Activity panel as a read-only projection of the
+  same ledger. If a newer turn supersedes or interrupts still-running tracked
+  work, its receipt is terminalized before the late result is discarded so the
+  Activity panel cannot remain stuck on “running.” Pause/resume preserves
+  receipts; disconnect and the next new session clear them.
 - Open one website from a fixed allowlist: GitHub, YouTube, AssemblyAI docs,
   Gmail, or Google Calendar.
+- LOCAL-only controlled browser research: bounded public-web search through a
+  fixed primary provider with one safe fallback when the primary is challenged
+  or returns no ordinary links, arbitrary explicit http/https navigation, page read/find,
+  history back, validated click/type, and explicit confirmation for
+  consequential actions. Spoken ordinal follow-ups such as “open the second
+  result” can resolve only ordinary links Ivy actually named.
 - Read-only Google Calendar queries for today, tomorrow, supported ranges,
   natural-language dates, and spoken ordinals. Date interpretation uses the
   primary Calendar timezone.
 - Local Codex project inspection through the Codex CLI in a read-only sandbox.
   It returns concise repository and code analysis; it does not modify the
   project.
-- A new voice request can proceed while an earlier interactive Codex request
-  is still running. Results from an older session or an earlier finalized user turn are ignored.
+- LOCAL-only developer Git inspection distinguishes current working-tree status,
+  bounded staged/unstaged diffs, and the five most recent commits. Commit
+  inspection accepts only an opaque reference established by that recent list;
+  it does not accept hashes, revisions, branches, tags, or ranges. Commit diffs
+  are bounded to eight safe files and small hunk excerpts; merge-commit detail
+  is intentionally unsupported. A changed-file follow-up opens the current
+  working-tree file in VS Code, never a historical snapshot.
+- Calendar uses the Voice Agent tool setting `execution_mode: "hold"`; Codex
+  inspection uses `execution_mode: "interactive"`.
+- Voice session and tool results are isolated with `sessionId` and
+  `toolTurnId`. When a newer user turn or an explicit cancellation supersedes
+  an interactive Codex call, the browser explicitly resolves the original
+  `call_id` as cancelled.
 
 Opening Gmail only opens the Gmail website. Offscreen does not read email.
+
+## Product direction
+
+Offscreen provides safe, stateful voice control through bounded browser
+automation via MCP, deterministic developer-workspace tools, and contextual
+follow-ups. Current browser automation is intentionally narrow rather than
+arbitrary: fixed-provider public web search, navigation, page read/find, back,
+validated click/type, explicit confirmation for consequential actions, and
+spoken ordinal link follow-ups.
+See [PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md), [ROADMAP.md](ROADMAP.md), and
+[DEMO.md](DEMO.md) for the grounded live-demo rehearsal and manual acceptance
+checklist, [SUBMISSION.md](SUBMISSION.md) for the grounded lablab submission
+draft, and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the hosted security
+preflight and remaining public-deployment blockers.
 
 ## How it works
 
@@ -37,6 +114,36 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
    local Codex CLI with a read-only sandbox. Each result is returned through
    the voice session so the agent can respond.
 
+## Architecture
+
+AssemblyAI interprets voice; Offscreen owns session state and safety; tools
+perform bounded actions. The browser owns audio, UI, wake listening, and the
+voice WebSocket. The local server owns secrets, Calendar OAuth, token minting,
+and local Codex execution. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+`public/index.html` contains the page markup, `public/styles.css` contains the
+page styles, and `public/ui.js` contains DOM lookup and UI rendering.
+`public/audio.js` owns microphone capture and PCM playback, and
+`public/tools.js` exports the static AssemblyAI tool definitions.
+`public/website-tool.js` owns supported website opening, and
+`public/calendar-tool.js` owns Calendar HTTP execution. `public/codex-tool.js`
+owns Codex HTTP execution. `public/tool-result-coordinator.js` owns generic
+tool-result queue, task, reply-done, and flush coordination. `public/app.js`
+keeps AssemblyAI application-event semantics, active session IDs, tool turns,
+session/turn checks, and the decision to supersede an earlier turn.
+`public/session-activity-ledger.js` owns the bounded in-memory receipt ledger
+queried by `get_session_activity`; it is not persisted or sent to the server.
+`public/ui.js` renders only a bounded snapshot of that ledger in the Activity
+panel and never owns activity lifecycle state.
+`public/voice-session.js` owns temporary-token fetching, AssemblyAI WebSocket
+connection lifecycle, and raw message transport. `public/codex-call-tracker.js` owns
+Codex interactive-call tracking and explicit supersession/cancellation.
+`public/wake-listener.js` owns the optional disconnected-state browser speech
+recognition and exact wake-phrase matching; it does not use the AssemblyAI
+session.
+The frontend will continue to be separated incrementally while preserving the
+working voice flow.
+
 ## Tech stack
 
 - Node.js and Express
@@ -49,12 +156,14 @@ Opening Gmail only opens the Gmail website. Offscreen does not read email.
 
 ### Requirements
 
-- Node.js 18 or newer and npm
+- Node.js 20 or newer and npm
 - An AssemblyAI API key
 - A Google Cloud project with the Google Calendar API enabled
 - Google OAuth desktop-client credentials
 - Codex CLI installed and authenticated if using the Codex voice tool
 - A modern browser with microphone permission available
+- A browser exposing `SpeechRecognition` or `webkitSpeechRecognition` if using
+  optional voice wake
 
 ### Install and configure
 
@@ -68,6 +177,16 @@ Set your AssemblyAI key in `.env`:
 ```text
 ASSEMBLYAI_API_KEY=your_key_here
 ```
+
+### Capability mode
+
+Offscreen defaults to `LOCAL` mode, which keeps the complete local developer
+feature set. Set `OFFSCREEN_MODE=HOSTED_DEMO` only for the hosted-safe demo
+surface: it keeps voice interaction and allowlisted website opening, while
+removing Calendar, local Codex inspection, and controlled-browser tools and
+their API routes. Any other non-empty value prevents startup rather than
+silently enabling local capabilities. This is capability separation only;
+token access protection is a later deployment increment.
 
 Save your Google OAuth desktop-client credential file as
 `credentials.json` in the repository root. Keep local OAuth token state,
@@ -115,6 +234,11 @@ local project inspection, not project modification.
   unauthenticated Codex endpoint, are not exposed to other devices on the
   local network.
 - Microphone audio is sent to AssemblyAI for voice-agent processing.
+- Voice wake is separate from AssemblyAI. When the user explicitly enables it
+  while disconnected, browser speech recognition listens for “Connect
+  Offscreen.” Depending on the browser, that recognition may process microphone
+  audio using an online browser/vendor service. The UI states when wake
+  listening is active.
 - Calendar results and Codex tool results flow through the AssemblyAI voice
   session so the agent can produce its response.
 - AssemblyAI API keys and Google OAuth credentials stay on the local server;
@@ -126,22 +250,37 @@ local project inspection, not project modification.
 npm test
 ```
 
-The suite uses Node's built-in test runner and currently has 11 deterministic
-Calendar parsing and timezone tests. It does not replace manual verification
-of microphone, AssemblyAI, Google OAuth, Calendar, or Codex integrations.
+The suite uses Node's built-in test runner and covers deterministic Calendar,
+tool, session, standby, repeat/summarize, current-activity, and voice-wake behavior. It does not
+replace manual verification of microphone, browser speech recognition,
+AssemblyAI, Google OAuth, Calendar, or Codex integrations.
 
 ## Current limitations
 
 - No email-reading integration; Gmail can only be opened.
-- No arbitrary website opening or general browser automation.
+- Browser MCP is local-demo only and intentionally bounded; it is not arbitrary
+  hosted computer control. Public web search uses a fixed DuckDuckGo HTML
+  provider with a one-time Bing fallback only for a challenge or no ordinary
+  observed links.
+  endpoint and then the existing bounded page snapshot. Contextual “open the
+  second result” follow-ups are limited to at most five ordinary links the user
+  actually heard from the latest page read/find/search response.
+- Deterministic developer workspace tools support Git status, bounded project
+  search/read, the configured test suite, and validated project-file opening in
+  VS Code; they do not provide arbitrary command execution.
 - No Calendar write access.
 - Codex is local and read-only.
 - Google Calendar requires local OAuth setup.
+- Public hosting is not implemented; the server is intentionally loopback-only.
 - Browser popup settings can prevent a supported website from opening in a new
   tab.
+- Voice wake depends on browser speech-recognition support and may require an
+  online recognition service; unsupported browsers show the control as
+  unavailable.
 
 ## Demo focus
 
 Offscreen is intentionally scoped for a dependable hackathon demo: speak to
-the agent, open a supported destination, check a real Calendar, and ask Codex
-about the local project without relying on broad computer automation.
+the agent, optionally reconnect hands-free with “Connect Offscreen,” open a
+supported destination, check a real Calendar, and ask Codex about the local
+project without relying on broad computer automation.

@@ -1,0 +1,267 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { VOICE_TOOLS } from "../public/tools.js";
+
+test("defines the bounded browser voice tools", () => {
+  const browserTools = [
+    ["browser_search_web", ["query"]],
+    ["browser_navigate", ["url"]],
+    ["browser_read_page", []],
+    ["browser_find_on_page", ["text"]],
+    ["browser_go_back", []],
+    ["browser_click", ["target"]],
+    ["browser_open_result", ["position"]],
+    ["browser_type", ["target", "text"]],
+    ["browser_confirm_action", []],
+  ];
+
+  for (const [name, required] of browserTools) {
+    const tool = VOICE_TOOLS.find((candidate) => candidate.name === name);
+    assert.ok(tool, `${name} should be defined`);
+    assert.deepEqual(tool.parameters.required, required);
+    assert.equal(tool.execution_mode, "hold");
+  }
+});
+
+test("defines a bounded public web search tool", () => {
+  const searchTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "browser_search_web"
+  );
+
+  assert.ok(searchTool);
+  assert.deepEqual(searchTool.parameters.required, ["query"]);
+  assert.match(searchTool.description, /fixed search provider/i);
+  assert.match(searchTool.description, /public web/i);
+  assert.match(searchTool.description, /browser_open_result/i);
+});
+
+test("describes safe ref-only browser interaction", () => {
+  const clickTool = VOICE_TOOLS.find((tool) => tool.name === "browser_click");
+  const typeTool = VOICE_TOOLS.find((tool) => tool.name === "browser_type");
+
+  assert.match(clickTool.description, /ref.*browser_read_page|browser_read_page.*ref/i);
+  assert.match(clickTool.description, /consequential.*confirmation|confirmation.*consequential/i);
+  assert.match(clickTool.description, /never repeat.*failed click.*refreshed/i);
+  assert.match(typeTool.description, /never submits/i);
+  assert.match(typeTool.description, /not editable.*read or find/i);
+});
+
+test("defines a bounded contextual browser result tool", () => {
+  const resultTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "browser_open_result"
+  );
+
+  assert.ok(resultTool);
+  assert.deepEqual(resultTool.parameters.required, ["position"]);
+  assert.equal(resultTool.parameters.properties.position.minimum, 1);
+  assert.equal(resultTool.parameters.properties.position.maximum, 5);
+  assert.match(resultTool.description, /actually heard|spoken-result/i);
+  assert.match(resultTool.description, /never provide.*URL.*selector.*ref/i);
+});
+
+test("defines a no-argument browser_confirm_action voice tool", () => {
+  const confirmTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "browser_confirm_action"
+  );
+
+  assert.ok(confirmTool);
+  assert.deepEqual(confirmTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(confirmTool.description, /pending.*action/i);
+  assert.match(confirmTool.description, /no.*ref|no.*target/i);
+});
+
+test("defines a no-argument disconnect_session voice tool", () => {
+  const disconnectTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "disconnect_session"
+  );
+
+  assert.ok(disconnectTool);
+  assert.deepEqual(disconnectTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+});
+
+test("defines a bounded session activity inspection tool", () => {
+  const activityTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "get_session_activity"
+  );
+
+  assert.ok(activityTool);
+  assert.deepEqual(activityTool.parameters.required, []);
+  assert.deepEqual(activityTool.parameters.properties.filter.enum, ["all", "failed"]);
+  assert.equal(activityTool.parameters.properties.limit.maximum, 10);
+  assert.match(activityTool.description, /session-local|bounded/i);
+  assert.match(activityTool.description, /Git status|current Git/i);
+});
+
+test("defines a no-argument cancel_current_work voice tool", () => {
+  const cancelTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "cancel_current_work"
+  );
+
+  assert.ok(cancelTool);
+  assert.deepEqual(cancelTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+});
+
+test("defines a no-argument pause_listening voice tool", () => {
+  const pauseTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "pause_listening"
+  );
+
+  assert.ok(pauseTool);
+  assert.deepEqual(pauseTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(pauseTool.description, /pause.*listening/i);
+  assert.match(pauseTool.description, /session connected/i);
+  assert.match(pauseTool.description, /standby/i);
+});
+
+test("defines exact no-argument Wake Phrase preference tools", () => {
+  for (const name of ["enable_wake_phrase", "disable_wake_phrase"]) {
+    const tool = VOICE_TOOLS.find((candidate) => candidate.name === name);
+
+    assert.ok(tool, `${name} should be defined`);
+    assert.deepEqual(tool.parameters, {
+      type: "object",
+      properties: {},
+      required: [],
+    });
+    assert.match(tool.description, /wake phrase/i);
+  }
+});
+
+test("defines a no-argument repeat_last_response voice tool", () => {
+  const repeatTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "repeat_last_response"
+  );
+
+  assert.ok(repeatTool);
+  assert.deepEqual(repeatTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(repeatTool.description, /repeat.*completed/i);
+});
+
+test("defines a no-argument summarize_last_response voice tool", () => {
+  const summarizeTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "summarize_last_response"
+  );
+
+  assert.ok(summarizeTool);
+  assert.deepEqual(summarizeTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.match(summarizeTool.description, /shorten|summarize/i);
+  assert.match(summarizeTool.description, /not.*rerun.*previous tool/i);
+});
+
+test("defines the bounded no-argument Git status voice tool", () => {
+  const gitStatusTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "get_git_status"
+  );
+
+  assert.ok(gitStatusTool);
+  assert.deepEqual(gitStatusTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.equal(gitStatusTool.execution_mode, "hold");
+  assert.match(gitStatusTool.description, /staged.*untracked.*clean/i);
+  assert.match(
+    gitStatusTool.description,
+    /every.*current Git working state.*including.*follow-up.*always call.*before answering.*earlier.*result/i
+  );
+  assert.match(gitStatusTool.description, /not.*commit.*push.*reset.*checkout/i);
+  assert.match(
+    gitStatusTool.description,
+    /branch names.*file paths.*status values.*untrusted.*repository.*data.*never.*instructions/i
+  );
+});
+
+test("defines the bounded optional-path Git diff voice tool", () => {
+  const gitDiffTool = VOICE_TOOLS.find((tool) => tool.name === "get_git_diff");
+
+  assert.ok(gitDiffTool);
+  assert.deepEqual(gitDiffTool.parameters.required, []);
+  assert.equal(gitDiffTool.parameters.properties.path.type, "string");
+  assert.equal(gitDiffTool.execution_mode, "hold");
+  assert.match(gitDiffTool.description, /staged.*unstaged.*untracked/i);
+  assert.match(gitDiffTool.description, /cannot.*commit.*push.*reset.*checkout/i);
+  assert.match(gitDiffTool.description, /diff excerpts.*untrusted.*repository.*data.*never.*instructions/i);
+});
+
+test("defines bounded recent-history and contextual commit-diff tools", () => {
+  const history = VOICE_TOOLS.find((tool) => tool.name === "get_git_history");
+  const diff = VOICE_TOOLS.find((tool) => tool.name === "get_commit_diff");
+  assert.deepEqual(history.parameters, { type: "object", properties: {}, required: [] });
+  assert.equal(history.execution_mode, "hold");
+  assert.match(history.description, /five most recent.*newest first/i);
+  assert.match(history.description, /first three returned commit subjects.*exact returned order/i);
+  assert.match(history.description, /never.*hash.*revision.*branch.*tag.*range.*flag/i);
+  assert.equal(diff.parameters.properties.position.type, "integer");
+  assert.match(diff.description, /only after.*get_git_history/i);
+  assert.match(diff.description, /do not provide.*hash.*revision.*branch.*tag.*range.*flag/i);
+});
+
+test("defines an interactive bounded no-argument project test voice tool", () => {
+  const testTool = VOICE_TOOLS.find(
+    (tool) => tool.name === "run_project_tests"
+  );
+
+  assert.ok(testTool);
+  assert.deepEqual(testTool.parameters, {
+    type: "object",
+    properties: {},
+    required: [],
+  });
+  assert.equal(testTool.execution_mode, "interactive");
+  assert.match(testTool.description, /run tests.*pass.*failing/i);
+  assert.match(testTool.description, /cannot.*command.*script.*flags.*project.*environment/i);
+  assert.match(testTool.description, /test names.*failure messages.*file paths.*test output.*untrusted.*repository-derived.*never.*instructions/i);
+});
+
+test("defines bounded local project search and read voice tools", () => {
+  const searchTool = VOICE_TOOLS.find((tool) => tool.name === "search_project");
+  const readTool = VOICE_TOOLS.find((tool) => tool.name === "read_project_file");
+
+  assert.deepEqual(searchTool.parameters.required, ["query"]);
+  assert.deepEqual(readTool.parameters.required, ["path"]);
+  assert.equal(searchTool.execution_mode, "hold");
+  assert.equal(readTool.execution_mode, "hold");
+  assert.match(searchTool.description, /literal/i);
+  assert.match(searchTool.description, /small bounded set.*safe text variants/i);
+  assert.match(searchTool.description, /paths.*filenames.*snippets.*untrusted.*data.*never.*instructions/i);
+  assert.match(readTool.description, /source content.*untrusted.*data.*never.*instructions/i);
+});
+
+test("defines a bounded LOCAL-only project file opening voice tool", () => {
+  const openTool = VOICE_TOOLS.find((tool) => tool.name === "open_project_file");
+
+  assert.ok(openTool);
+  assert.deepEqual(openTool.parameters.required, ["path"]);
+  assert.equal(openTool.parameters.properties.path.type, "string");
+  assert.equal(openTool.parameters.properties.line.type, "integer");
+  assert.equal(openTool.execution_mode, "hold");
+  assert.match(openTool.description, /VS Code/i);
+  assert.match(openTool.description, /project-relative/i);
+  assert.match(openTool.description, /cannot.*arbitrary filesystem/i);
+  assert.match(openTool.description, /does not edit/i);
+});
