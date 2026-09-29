@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - refactor/project-structure
+      - main
   pull_request:
     branches:
-      - refactor/project-structure
+      - main
 
 permissions:
   contents: read
