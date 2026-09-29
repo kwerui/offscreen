@@ -10,11 +10,14 @@ const defaultPrompt = await readFile(
 test("routes general browser requests through the bounded browser tools", () => {
   assert.match(defaultPrompt, /BROWSER TOOL ROUTING/);
   assert.match(defaultPrompt, /arbitrary explicit domain or URL.*ALWAYS use browser_navigate/i);
+  assert.match(defaultPrompt, /search the web[\s\S]*ALWAYS use browser_search_web/i);
   assert.match(defaultPrompt, /wikipedia\.org, example\.com, and github\.com/i);
   assert.match(defaultPrompt, /open_website.*convenience shortcut.*NOT.*limit/i);
   assert.match(defaultPrompt, /browser_read_page.*inspect|inspect.*browser_read_page/i);
   assert.match(defaultPrompt, /browser_find_on_page.*locate|locate.*browser_find_on_page/i);
   assert.match(defaultPrompt, /browser_click.*observed refs|observed refs.*browser_click/i);
+  assert.match(defaultPrompt, /open the second result[\s\S]*browser_open_result.*position\s*=\s*2/i);
+  assert.match(defaultPrompt, /browser_open_result[\s\S]*actually heard[\s\S]*Never invent.*raw ref/i);
   assert.match(defaultPrompt, /browser_type.*observed refs|observed refs.*browser_type/i);
   assert.match(defaultPrompt, /Typing must not submit/i);
   assert.match(defaultPrompt, /consequential click.*browser_click.*confirmation_required/i);

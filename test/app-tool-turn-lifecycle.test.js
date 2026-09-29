@@ -333,7 +333,8 @@ test("cancels current Codex work, ignores its late completion, and preserves tra
     globalThis.WebSocket = originalWebSocket;
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
-    Object.defineProperty(globalThis, "navigator", originalNavigator);
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originalAudioWorkletNode;
   }
 });

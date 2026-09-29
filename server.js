@@ -76,11 +76,27 @@ export function createApp({
   const capabilities = getCapabilities(mode);
   const clientCapabilities = getClientCapabilities(mode);
   const app = express();
+
+  app.disable("x-powered-by");
+
+  app.use((_req, res, next) => {
+    res.set("X-Content-Type-Options", "nosniff");
+    res.set("X-Frame-Options", "DENY");
+    res.set("Referrer-Policy", "no-referrer");
+    res.set("Permissions-Policy", "camera=(), geolocation=()");
+    next();
+  });
+
+  app.use("/api", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
+  app.use(express.json({ limit: "16kb", strict: true }));
+
   // These opaque references are issued only after fixed recent-history
   // inspection. The browser keeps them out of model-facing tool results.
   const commitReferences = new Map();
-
-app.use(express.json());
 
 app.get("/api/capabilities.js", (_req, res) => {
   res.set("Cache-Control", "no-store").type("application/javascript").send(
@@ -100,8 +116,7 @@ app.get("/api/voice-token", async (_req, res) => {
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      console.error(`Token mint failed: ${response.status} ${body}`);
+      console.error(`Token mint failed with status ${response.status}`);
       return res.status(502).json({ error: "Failed to mint token" });
     }
 
@@ -496,6 +511,22 @@ app.post("/api/developer/tests", async (_req, res) => {
   res.status(200).json(result);
 });
 }
+
+app.use((error, _req, res, next) => {
+  if (error?.type === "entity.too.large") {
+    return res.status(413).json({ error: "Request body is too large" });
+  }
+
+  if (
+    error instanceof SyntaxError &&
+    error.status === 400 &&
+    Object.hasOwn(error, "body")
+  ) {
+    return res.status(400).json({ error: "Invalid JSON request body" });
+  }
+
+  next(error);
+});
 
   return app;
 }

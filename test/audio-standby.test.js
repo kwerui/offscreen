@@ -99,7 +99,9 @@ test("standby releases the microphone and resume reacquires it before capture re
   } finally {
     tearDownAudio();
     globalThis.window = originalWindow;
-    Object.defineProperty(globalThis, "navigator", originalNavigator);
+    if (originalNavigator) if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originalAudioWorkletNode;
   }
 });
@@ -175,7 +177,8 @@ test("listening state cues use opposite pitch directions", async () => {
   } finally {
     tearDownAudio();
     globalThis.window = originalWindow;
-    Object.defineProperty(globalThis, "navigator", originalNavigator);
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
     globalThis.AudioWorkletNode = originalAudioWorkletNode;
   }
 });
